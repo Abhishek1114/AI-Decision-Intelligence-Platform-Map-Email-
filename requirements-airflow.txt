@@ -1,0 +1,32 @@
+# requirements-phase2.txt
+# Phase 2 Airflow ingestion pipeline dependencies
+# Install: pip install -r requirements-phase2.txt --break-system-packages
+
+# Airflow (install via constraints for reproducibility)
+# Full install command:
+#   pip install "apache-airflow==2.9.0" \
+#     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.0/constraints-3.11.txt"
+apache-airflow==2.9.0
+
+# HTTP client
+requests==2.31.0
+
+neo4j>=5.20
+
+# Pydantic v2 (already in Phase 1 requirements.txt — kept here for completeness)
+pydantic==2.6.4
+
+# PostgreSQL driver for Airflow metadata DB
+psycopg2-binary==2.9.9
+
+# Phase 1 deps (already installed — listed for clarity)
+# neo4j==5.18.0
+# python-dotenv==1.0.1
+
+# Optional: MarineTraffic SDK (only if MARINETRAFFIC_API_KEY is set)
+# No official SDK — uses requests directly
+
+# Test
+pytest==8.1.1
+pytest-mock==3.14.0
+responses==0.25.0    # mock HTTP responses in tests

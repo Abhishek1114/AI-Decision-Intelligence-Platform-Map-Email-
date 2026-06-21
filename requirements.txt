@@ -1,0 +1,16 @@
+# Core graph driver
+neo4j==5.18.0
+
+# Data modeling & validation
+pydantic==2.6.4
+
+# Config management
+python-dotenv==1.0.1
+
+# Utilities
+rich==13.7.1        # pretty CLI output during seeding
+typer==0.12.3       # seed CLI entrypoint
+
+# Testing
+pytest==8.1.1
+pytest-asyncio==0.23.6

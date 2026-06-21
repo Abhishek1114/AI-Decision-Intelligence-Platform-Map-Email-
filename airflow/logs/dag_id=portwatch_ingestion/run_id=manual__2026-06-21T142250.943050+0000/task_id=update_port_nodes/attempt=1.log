@@ -1,0 +1,25 @@
+[2026-06-21T14:22:52.209+0000] {local_task_job_runner.py:120} INFO - ::group::Pre task execution logs
+[2026-06-21T14:22:52.247+0000] {taskinstance.py:2073} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: portwatch_ingestion.update_port_nodes manual__2026-06-21T14:22:50.943050+00:00 [queued]>
+[2026-06-21T14:22:52.257+0000] {taskinstance.py:2073} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: portwatch_ingestion.update_port_nodes manual__2026-06-21T14:22:50.943050+00:00 [queued]>
+[2026-06-21T14:22:52.257+0000] {taskinstance.py:2303} INFO - Starting attempt 1 of 3
+[2026-06-21T14:22:52.271+0000] {taskinstance.py:2327} INFO - Executing <Task(_PythonDecoratedOperator): update_port_nodes> on 2026-06-21 14:22:50.943050+00:00
+[2026-06-21T14:22:52.283+0000] {logging_mixin.py:188} WARNING - /home/***/.local/lib/python3.12/site-packages/***/task/task_runner/standard_task_runner.py:61 DeprecationWarning: This process (pid=347) is multi-threaded, use of fork() may lead to deadlocks in the child.
+[2026-06-21T14:22:52.283+0000] {standard_task_runner.py:90} INFO - Running: ['***', 'tasks', 'run', 'portwatch_ingestion', 'update_port_nodes', 'manual__2026-06-21T14:22:50.943050+00:00', '--job-id', '105', '--raw', '--subdir', 'DAGS_FOLDER/portwatch_ingestion_dag.py', '--cfg-path', '/tmp/tmp0ohkh6c9']
+[2026-06-21T14:22:52.284+0000] {standard_task_runner.py:63} INFO - Started process 352 to run task
+[2026-06-21T14:22:52.285+0000] {standard_task_runner.py:91} INFO - Job 105: Subtask update_port_nodes
+[2026-06-21T14:22:52.370+0000] {task_command.py:426} INFO - Running <TaskInstance: portwatch_ingestion.update_port_nodes manual__2026-06-21T14:22:50.943050+00:00 [running]> on host 138e309dce9e
+[2026-06-21T14:22:52.496+0000] {taskinstance.py:2644} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='scm-pipeline' AIRFLOW_CTX_DAG_ID='portwatch_ingestion' AIRFLOW_CTX_TASK_ID='update_port_nodes' AIRFLOW_CTX_EXECUTION_DATE='2026-06-21T14:22:50.943050+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-21T14:22:50.943050+00:00'
+[2026-06-21T14:22:52.497+0000] {taskinstance.py:430} INFO - ::endgroup::
+[2026-06-21T14:22:53.177+0000] {connection.py:64} INFO - ✅ Connected to Neo4j at bolt://scm_neo4j:7687
+[2026-06-21T14:22:53.269+0000] {portwatch_ingestion_dag.py:95} INFO - Updated port TWKHH: congestion=0.501 dwell=4.2
+[2026-06-21T14:22:53.288+0000] {portwatch_ingestion_dag.py:95} INFO - Updated port KRPUS: congestion=0.351 dwell=2.9
+[2026-06-21T14:22:53.303+0000] {portwatch_ingestion_dag.py:95} INFO - Updated port SGSIN: congestion=0.289 dwell=2.4
+[2026-06-21T14:22:53.316+0000] {portwatch_ingestion_dag.py:95} INFO - Updated port USLAX: congestion=0.476 dwell=4.4
+[2026-06-21T14:22:53.334+0000] {portwatch_ingestion_dag.py:95} INFO - Updated port NLRTM: congestion=0.195 dwell=2.9
+[2026-06-21T14:22:53.362+0000] {portwatch_ingestion_dag.py:95} INFO - Updated port USLGB: congestion=0.550 dwell=4.2
+[2026-06-21T14:22:53.363+0000] {python.py:237} INFO - Done. Returned value was: {'updated': 6, 'errors': 0}
+[2026-06-21T14:22:53.364+0000] {taskinstance.py:441} INFO - ::group::Post task execution logs
+[2026-06-21T14:22:53.402+0000] {taskinstance.py:1205} INFO - Marking task as SUCCESS. dag_id=portwatch_ingestion, task_id=update_port_nodes, execution_date=20260621T142250, start_date=20260621T142252, end_date=20260621T142253
+[2026-06-21T14:22:53.424+0000] {local_task_job_runner.py:240} INFO - Task exited with return code 0
+[2026-06-21T14:22:53.441+0000] {taskinstance.py:3482} INFO - 0 downstream tasks scheduled from follow-on schedule check
+[2026-06-21T14:22:53.446+0000] {local_task_job_runner.py:222} INFO - ::endgroup::

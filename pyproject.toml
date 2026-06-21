@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "unit: pure-function tests, no network or services required",
+    "integration: requires live Neo4j (graph.connection) and/or Postgres",
+]
