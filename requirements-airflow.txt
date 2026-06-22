@@ -30,3 +30,38 @@ psycopg2-binary==2.9.9
 pytest==8.1.1
 pytest-mock==3.14.0
 responses==0.25.0    # mock HTTP responses in tests
+
+
+
+# spaCy — NER, tokenization, sentence boundaries
+# en_core_web_lg model downloaded separately in Dockerfile via:
+#   python -m spacy download en_core_web_md
+spacy==3.7.4
+# spaCy requires these — pin to avoid conflicts with spaCy 3.7.x
+thinc==8.2.3
+cymem==2.0.8
+preshed==3.0.9
+murmurhash==1.0.10
+blis==0.7.11
+srsly==2.4.8
+catalogue==2.0.10
+weasel==0.3.4
+confection==0.1.4
+langcodes==3.3.0
+ 
+# sentence-transformers — all-MiniLM-L6-v2 embeddings (384-dim)
+sentence-transformers==2.7.0
+# sentence-transformers requires:
+torch==2.2.2          # CPU-only — no GPU needed for inference at this scale
+transformers==4.40.0
+huggingface-hub==0.23.0
+tokenizers==0.19.1
+safetensors==0.4.3
+ 
+# numpy — embedding math (cosine similarity, batch operations)
+numpy==1.26.4
+ 
+# ── Testing ────────────────────────────────────────────────────────────────
+pytest==8.1.1
+pytest-mock==3.14.0
+responses==0.25.0
