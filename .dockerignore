@@ -1,0 +1,33 @@
+# .dockerignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Data and logs — these are runtime artefacts, not source
+data/
+logs/
+*.log
+*.db
+
+# Dev tooling
+.git/
+.gitignore
+.env
+*.md
+
+# Test output
+.pytest_cache/
+.coverage
+htmlcov/

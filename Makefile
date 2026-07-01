@@ -1,130 +1,60 @@
-.PHONY: up down migrate seed test clean shell
+.PHONY: up down migrate seed test verify clean
 
-# ── Infrastructure ─────────────────────────────────────────────
+NEO4J_URI ?= bolt://localhost:7687
+
 up:
-	docker compose up -d neo4j
-	@echo "⏳ Waiting for Neo4j to be healthy..."
-	@until docker compose exec neo4j wget -q --spider http://localhost:7474 2>/dev/null; do sleep 2; done
-	@echo "✅ Neo4j is ready at http://localhost:7474"
+	docker compose up -d
+	@echo "Waiting for Neo4j to be ready..."
+	@until docker exec sc_neo4j cypher-shell -u neo4j -p supply_chain_secret "RETURN 1" > /dev/null 2>&1; do sleep 3; done
+	@echo "Neo4j ready."
 
 down:
 	docker compose down
 
-# ── Schema & Data ─────────────────────────────────────────────
 migrate:
-	python -m graph.migrations.001_constraints_and_indexes
+	python phase1/migrations/001_initial_schema.py
 
 seed:
-	python -m graph.seeds.seed_data
+	python phase1/seeds/seed_customers.py
 
 bootstrap: up migrate seed
-	@echo "✅ Graph bootstrapped and seeded"
+	@echo "Phase 1 bootstrap complete."
 
-# ── Tests ─────────────────────────────────────────────────────
 test:
-	pytest tests/graph/ -v
+	pytest phase1/tests/test_phase1.py -v
 
-# ── Dev utilities ─────────────────────────────────────────────
-shell:
-	docker compose exec neo4j cypher-shell -u $$NEO4J_USER -p $$NEO4J_PASSWORD
+verify:
+	@echo "Running verification queries..."
+	@docker exec sc_neo4j cypher-shell -u neo4j -p supply_chain_secret \
+	  "MATCH (c:Customer) RETURN c.customer_id, c.company_name"
+	@docker exec sc_neo4j cypher-shell -u neo4j -p supply_chain_secret \
+	  "MATCH (c:Customer)-[:OWNS]->(n) RETURN c.company_name, labels(n)[0] AS type, count(n) AS count ORDER BY c.company_name, type"
 
 clean:
-	docker compose down -v
-	@echo "⚠️  All Neo4j data volumes deleted"
+	docker exec sc_neo4j cypher-shell -u neo4j -p supply_chain_secret \
+	  "MATCH (n) DETACH DELETE n"
+	@echo "Graph cleared."
 
-# ── Quick sanity check ────────────────────────────────────────
-summary:
-	@python -c "\
-from graph.connection import Neo4jConnection; \
-from graph.queries.repository import SupplyChainRepository; \
-conn = Neo4jConnection(); conn.connect(); \
-repo = SupplyChainRepository(conn); \
-import json; print(json.dumps(repo.graph_summary(), indent=2)); \
-conn.close()"
+# Add to existing Makefile
 
+phase2-migrate:
+	python phase2/migrations/002_global_events_schema.py
 
-# Makefile.airflow
-#
-# Phase 2 additions. Phase 1's Makefile already defines bootstrap/migrate/
-# seed/test for the Neo4j side — this file is invoked separately so we
-# don't touch or risk breaking that file:
-#
-#   make -f Makefile.airflow airflow-up
-#
-# If you'd rather have one Makefile, append these targets to the existing
-# one manually — kept separate here for a clean diff against Phase 1.
+phase2-up:
+	docker compose up -d redis airflow webhook_receiver
 
-.PHONY: airflow-up airflow-down airflow-logs airflow-test ingestion-test ingestion-unit-test
+phase2-bootstrap: phase2-up phase2-migrate
+	@echo "Phase 2 infrastructure ready."
+	@echo "Airflow UI: http://localhost:8080  (admin/admin)"
+	@echo "Webhook receiver: http://localhost:8001/health"
 
-airflow-up:
-	docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d --build
-
-airflow-down:
-	docker compose -f docker-compose.yml -f docker-compose.airflow.yml down
-
-airflow-logs:
-	docker compose -f docker-compose.yml -f docker-compose.airflow.yml logs -f scm_airflow_scheduler
-
-# Unit tests only — pure functions, no live Neo4j/Postgres required.
-ingestion-unit-test:
-	PYTHONPATH=. pytest tests/ingestion -v -m "not integration"
-
-# Full suite, requires live services (run after `make airflow-up` and
-# Phase 1's `make migrate seed`).
-ingestion-test:
-	PYTHONPATH=. pytest tests/ingestion -v
-
-# ── Phase 2: Airflow ──────────────────────────────────────────────────────────
- 
-airflow-up:
-	docker compose -f docker-compose.yml -f docker-compose.airflow.yml up -d
- 
-airflow-init:
-	docker compose -f docker-compose.yml -f docker-compose.airflow.yml \
-		run --rm airflow_init
- 
-airflow-down:
-	docker compose -f docker-compose.yml -f docker-compose.airflow.yml \
-		down --remove-orphans
- 
-airflow-logs:
-	docker compose -f docker-compose.yml -f docker-compose.airflow.yml \
-		logs -f airflow_scheduler airflow_webserver
- 
-# Unpause all Phase 2 DAGs after first deploy
-airflow-unpause-dags:
-	docker exec scm_airflow_webserver airflow dags unpause gdelt_ingestion
-	docker exec scm_airflow_webserver airflow dags unpause weather_ingestion
-	docker exec scm_airflow_webserver airflow dags unpause portwatch_ingestion
- 
-# Trigger a manual GDELT run (useful for testing)
-airflow-trigger-gdelt:
-	docker exec scm_airflow_webserver airflow dags trigger gdelt_ingestion
- 
-# ── Phase 2: Tests ───────────────────────────────────────────────────────────
- 
-test-ingestion:
-	pytest tests/ingestion/ -v --tb=short
- 
-# Run all tests (Phase 1 + 2)
-test-all:
-	pytest tests/ -v --tb=short
- 
-# ── Phase 2: Manual fetcher runs (without Airflow) ────────────────────────────
- 
-run-gdelt-fetch:
-	python -c "from ingestion.gdelt.fetcher import GDELTFetcher; \
-		f = GDELTFetcher(); arts = f.fetch(); \
-		print(f'Fetched {len(arts)} articles'); \
-		[print(a.title[:80]) for a in arts[:5]]"
- 
-run-weather-fetch:
-	python -c "from ingestion.weather.fetcher import WeatherAPIFetcher, SEED_MONITORED_LOCATIONS; \
-		import os; f = WeatherAPIFetcher(api_key=os.environ['WEATHERAPI_KEY']); \
-		alerts, conds = f.fetch_all_locations(); \
-		print(f'{len(alerts)} alerts, {len(conds)} threshold conditions')"
- 
-run-port-fetch:
-	python -c "from ingestion.portwatch.fetcher import MockPortFetcher; \
-		snaps = MockPortFetcher().fetch_all(); \
-		[print(f'{s.port_id}: congestion={s.congestion_index:.2f} dwell={s.avg_dwell_days:.1f}d anomalous={s.is_anomalous}') for s in snaps]"
+verify-events:
+	@echo "=== Recent GlobalEvents in Neo4j ==="
+	python -c "
+from neo4j import GraphDatabase
+d = GraphDatabase.driver('bolt://localhost:7687', auth=('neo4j','supply_chain_secret'))
+with d.session() as s:
+    r = s.run('MATCH (e:GlobalEvent) RETURN e.event_type, e.country, e.severity, e.source, e.occurred_at ORDER BY e.ingested_at DESC LIMIT 20')
+    for row in r: print(dict(row))
+d.close()
+"

@@ -1,8 +1,3 @@
-FROM apache/airflow:2.9.1
-
-COPY requirements-airflow.txt .
-RUN pip install -r requirements-airflow.txt
-
 # Dockerfile
 # -----------
 # Single image used by all Airflow services (webserver, scheduler, init, workers).
@@ -39,7 +34,9 @@ USER airflow
 # Install in one RUN to keep layer count low
 COPY requirements-airflow.txt /tmp/requirements-airflow.txt
  
-RUN pip install --no-cache-dir -r /tmp/requirements-airflow.txt
+RUN pip install \
+    --no-cache-dir \
+    -r /tmp/requirements-airflow.txt
  
 # ── spaCy model ────────────────────────────────────────────────────────────
 # Download en_core_web_lg at build time so container startup is instant.

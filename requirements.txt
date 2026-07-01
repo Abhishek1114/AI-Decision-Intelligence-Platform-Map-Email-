@@ -1,16 +1,65 @@
-# Core graph driver
+# Neo4j driver
 neo4j==5.18.0
 
-# Data modeling & validation
-pydantic==2.6.4
+# Data models
+pydantic==2.7.1
 
-# Config management
+# Environment variables
 python-dotenv==1.0.1
 
-# Utilities
-rich==13.7.1        # pretty CLI output during seeding
-typer==0.12.3       # seed CLI entrypoint
-
 # Testing
-pytest==8.1.1
-pytest-asyncio==0.23.6
+pytest==8.2.0
+pytest-mock==3.14.0
+
+# Phase 2+ (install now to avoid re-installing later)
+apache-airflow==2.9.1
+requests==2.31.0
+redis==5.0.4
+
+# ─────────────────────────────────────────────
+# requirements.txt — Phase 2
+# Pin minor versions, not patch, so security
+# fixes land automatically on docker rebuild.
+# ─────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
+# NEO4J
+# ─────────────────────────────────────────────
+neo4j==5.*
+
+
+
+# ─────────────────────────────────────────────
+# GOOGLE NEWS RSS
+# feedparser handles HTTP + XML in one call,
+# no API key required.
+# ─────────────────────────────────────────────
+feedparser==6.*
+
+# ─────────────────────────────────────────────
+# DATA VALIDATION
+# Pydantic v2 — same version as Phase 1.
+# Must match Phase 1 exactly to share models.
+# ─────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────
+# WEBHOOK RECEIVER
+# FastAPI + uvicorn for the USGS push endpoint.
+# ─────────────────────────────────────────────
+fastapi==0.111.*
+uvicorn==0.30.*
+
+# ─────────────────────────────────────────────
+# STANDARD LIBRARY BACKFILLS
+# python-dateutil for robust date parsing across
+# source formats (USGS, RSS, WeatherAPI all differ).
+# ─────────────────────────────────────────────
+python-dateutil==2.*
+
+# ─────────────────────────────────────────────
+# TESTING
+# Same pytest version as Phase 1.
+# ─────────────────────────────────────────────
+
+pytest-asyncio==0.23.*
