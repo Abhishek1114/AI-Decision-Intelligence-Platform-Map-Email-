@@ -1,13 +1,24 @@
-FROM apache/airflow:2.9.1
+FROM apache/airflow:2.9.1-python3.11
 
 USER root
-
-RUN apt-get update && \
-    apt-get install -y curl gcc build-essential && \
-    apt-get clean
-
 USER airflow
 
-COPY requirements.txt /tmp/requirements.txt
+# Layer 1: lightweight deps (Phase 2 carryover)
+RUN pip install --no-cache-dir neo4j==5.18.0 apache-airflow==2.9.1 requests==2.31.0 redis==5.0.4 pydantic==2.7.1 python-dateutil==2.* feedparser==6.*
 
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+# Layer 2: CPU-only torch — CRITICAL, default pip pulls CUDA build (+4GB)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# Layer 3: sentence-transformers
+RUN pip install --no-cache-dir sentence-transformers==3.*
+
+# Layer 4: spaCy small model
+RUN pip install --no-cache-dir spacy==3.* \
+    && python -m spacy download en_core_web_sm
+
+# Layer 5: fuzzy matching
+RUN pip install --no-cache-dir rapidfuzz==3.*
+
+# Layer 6: pre-download embedding model weights into the image
+# (bakes ~90MB into a cached layer instead of downloading on first DAG run)
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"

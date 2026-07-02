@@ -56,7 +56,6 @@ services:
         AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
         AIRFLOW__CORE__LOAD_EXAMPLES: "false"
         AIRFLOW__WEBSERVER__SECRET_KEY: supplychain_airflow_secret
-        _PIP_ADDITIONAL_REQUIREMENTS: "neo4j==5.* feedparser==6.* redis==5.* requests==2.* pydantic==2.* python-dateutil==2.*"
         NEO4J_URI: bolt://neo4j:7687
         NEO4J_USER: neo4j
         NEO4J_PASSWORD: supply_chain_secret
@@ -66,6 +65,7 @@ services:
       volumes:
         - ./phase2/dags:/opt/airflow/dags
         - ./phase2:/opt/airflow/phase2
+        - ./phase3:/opt/airflow/phase3
         - airflow_data:/opt/airflow
       ports:
         - "8080:8080"
@@ -73,6 +73,7 @@ services:
       command:
         - -c
         - |
+          rm -f /opt/airflow/airflow-webserver.pid &&
           airflow db migrate &&
           airflow users create \
             --username admin \
@@ -83,12 +84,12 @@ services:
             --email admin@supplychain.local || true &&
           airflow webserver &
           airflow scheduler
-      healthcheck:
-        test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-        interval: 30s
-        timeout: 10s
-        retries: 5
-        start_period: 60s
+            healthcheck:
+              test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+              interval: 30s
+              timeout: 10s
+              retries: 5
+              start_period: 60s
 
   webhook_receiver:
     build:

@@ -67,7 +67,7 @@ INDEXES = [
     ),
     (
         "source_tier — Phase 4 alert threshold logic: Tier 2 suppliers only "
-        "alert when source_tier = tier1 AND severity = high | critical",
+        "alert when source_tier = tier_1 AND severity = high | critical",
         "CREATE INDEX global_event_source_tier IF NOT EXISTS "
         "FOR (e:GlobalEvent) ON (e.source_tier)"
     ),
@@ -97,13 +97,13 @@ POINT_INDEXES = [
 # Property: source_tier (string, lowercase enum)
 # Values:   "tier1" | "tier2"
 #
-# tier1 events  → always propagate to Phase 4 customer matching,
+# tier_1 events →  → always propagate to Phase 4 customer matching,
 #                 regardless of severity.
 #                 Sources: usgs, portwatch, open_meteo
 #                 Rationale: precise, structured, geo-tagged data.
 #                 A M5.0 earthquake is always worth checking.
 #
-# tier2 events  → only propagate to Phase 4 when severity = "high" | "critical"
+# tier_2 events  → only propagate to Phase 4 when severity = "high" | "critical"
 #                 Sources: gdelt, newsapi, google_news
 #                 Rationale: news articles are noisy. A "medium" severity
 #                 Google News article about vague supply chain tension should
@@ -113,13 +113,13 @@ POINT_INDEXES = [
 # Set in normaliser.py — not hardcoded on the model — because the same
 # source can theoretically produce both tier1 and tier2 events in future.
 SOURCE_TIER_MAP = {
-    "usgs":        "tier1",
-    "portwatch":   "tier1",
-    "open_meteo":  "tier1",
-    "gdelt":       "tier2",
-    "newsapi":     "tier2",
-    "google_news": "tier2",
-    "manual":      "tier1",   # manually entered events always propagate
+    "usgs":        "tier_1",
+    "portwatch":   "tier_1",
+    "open_meteo":  "tier_1",
+    "gdelt":       "tier_2",
+    "newsapi":     "tier_2",
+    "google_news": "tier_2",
+    "manual":      "tier_1",   # manually entered events always propagate
 }
 
 

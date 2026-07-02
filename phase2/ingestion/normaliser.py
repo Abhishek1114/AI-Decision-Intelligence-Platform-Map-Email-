@@ -40,7 +40,7 @@ class EventNormaliser:
 
         # 4. Build GlobalEvent model — Pydantic validation runs here
         try:
-            source_tier = SOURCE_TIER_MAP.get(source, "tier2")
+            source_tier = SOURCE_TIER_MAP.get(source, "tier_2")
 
             event = GlobalEvent(
                 event_id    = event_id,

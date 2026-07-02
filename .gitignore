@@ -1,0 +1,80 @@
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# ===========================
+# Environment variables
+# ===========================
+.env
+
+# ===========================
+# IDE
+# ===========================
+.vscode/
+.idea/
+*.swp
+
+# ===========================
+# Airflow
+# ===========================
+airflow/logs/
+airflow/webserver_config.py
+
+# ===========================
+# Neo4j
+# ===========================
+neo4j_data/
+neo4j_logs/
+neo4j_import/
+neo4j_plugins/
+
+# ===========================
+# Docker
+# ===========================
+*.log
+docker-compose.override.yml
+
+# ===========================
+# HuggingFace / Models
+# ===========================
+hf_cache/
+.cache/
+models/
+
+# ===========================
+# Build artifacts
+# ===========================
+dist/
+build/
+*.egg-info/
+
+# ===========================
+# OS files
+# ===========================
+.DS_Store
+Thumbs.db
+
+# ===========================
+# Testing
+# ===========================
+.coverage
+htmlcov/
+
+# ===========================
+# Jupyter
+# ===========================
+.ipynb_checkpoints/
