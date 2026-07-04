@@ -9,20 +9,35 @@ and writes IMPACTS relationships.
 Depends on:
     phase4.cypher_queries  -- all Cypher, parameterized
     phase4.scoring         -- pure scoring/alert-rule functions, no Neo4j dependency
+    phase2.phase5.streaming.redis_stream -- produce_alert() (added this session)
 
 Follows Phase 1-3 conventions:
     - explicit params dicts, never **model_dump()
     - datetimes serialized via .isoformat()
     - enums passed as plain lowercase strings, already validated upstream
+
+Phase 5 integration (added this session): every triggered IMPACTS write now
+also calls produce_alert() onto the Redis stream, so Phase 5's LangGraph
+agent picks it up within its normal poll interval. This is the one wiring
+point Phase 5 was missing -- IMPACTS was being written correctly the whole
+time, nothing downstream was ever being notified.
+
+The redis client is optional (redis_client=None) and threaded through every
+layer as a plain parameter, matching the existing driver-injection style --
+this keeps process_event/run_impact_matching testable without a live Redis
+connection, and makes the Phase 5 dependency explicit rather than a hidden
+module-level singleton.
 """
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 from neo4j import Driver
+import redis
 
 from phase2.phase4 import cypher_queries as q
 from phase2.phase4 import scoring
+from phase2.phase5.streaming.redis_stream import produce_alert
 
 # Confirmed this session: closest true-positive supplier sat at 1.5km,
 # next-closest unrelated supplier at 465km -- 100km leaves wide margin
@@ -107,6 +122,9 @@ def write_impact(
     match_confidence: float,
     severity: str,
     tier: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    redis_client: Optional[redis.Redis] = None,
 ) -> None:
     params = {
         "event_id": event_id,
@@ -123,14 +141,42 @@ def write_impact(
     with driver.session() as session:
         session.run(q.WRITE_IMPACTS, parameters=params)
 
+    # Notify Phase 5 -- only for triggered alerts, and only if a redis_client
+    # was actually provided (keeps this function usable in tests/backfills
+    # without a live Redis connection). A failure here must never break the
+    # Neo4j write above, which already succeeded -- log and move on rather
+    # than raise, so one bad alert-produce doesn't stall the whole DAG run.
+    if triggered and redis_client is not None:
+        try:
+            event_text = f"{title or ''}. {description or ''}".strip()
+            produce_alert(
+                redis_client,
+                customer_id=customer_id,
+                event_id=event_id,
+                supplier_id=supplier_id,
+                title=title or "",
+                event_text=event_text,
+            )
+        except Exception:
+            import logging
+            logging.getLogger("phase4.impact_matching").exception(
+                f"produce_alert failed for event={event_id} customer={customer_id} "
+                f"supplier={supplier_id} -- IMPACTS was written successfully, "
+                f"but Phase 5 was not notified. Re-run scripts/backfill_alerts_to_stream.py "
+                f"in phase5 to pick this up manually."
+            )
+
 
 def process_event(
     driver: Driver,
     event: dict[str, Any],
     distance_threshold_m: int = DEFAULT_GEO_DISTANCE_THRESHOLD_M,
+    redis_client: Optional[redis.Redis] = None,
 ) -> dict[str, int]:
     event_id = event["event_id"]
     severity = event["severity"]
+    title = event.get("title")
+    description = event.get("description")
 
     path_a = match_path_a(driver, event_id)
     path_b = match_path_b(driver, event_id, distance_threshold_m)
@@ -175,6 +221,9 @@ def process_event(
                 match_confidence=sm["match_confidence"],
                 severity=severity,
                 tier=tier,
+                title=title,
+                description=description,
+                redis_client=redis_client,
             )
             impacts_written += 1
             if triggered:
@@ -186,13 +235,14 @@ def process_event(
 def run_impact_matching(
     driver: Driver,
     distance_threshold_m: int = DEFAULT_GEO_DISTANCE_THRESHOLD_M,
+    redis_client: Optional[redis.Redis] = None,
 ) -> dict[str, int]:
     events = fetch_eligible_events(driver)
 
     total_impacts = 0
     total_alerts = 0
     for event in events:
-        result = process_event(driver, event, distance_threshold_m)
+        result = process_event(driver, event, distance_threshold_m, redis_client=redis_client)
         total_impacts += result["impacts_written"]
         total_alerts += result["alerts_triggered"]
 

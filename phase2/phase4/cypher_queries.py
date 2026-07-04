@@ -12,6 +12,11 @@ Confirmed against live data this session (not assumed):
   - Supplier.is_sole_source lives on the Supplier node, not on OWNS.
   - FEEDS points (tier_2)-[:FEEDS]->(tier_1) -- e.g. ASML -[:FEEDS]-> TSMC.
     Read as "the tier_2 supplier feeds the tier_1 supplier."
+
+Phase 5 integration (added this session): title/description are now
+returned by FETCH_ELIGIBLE_EVENTS so impact_matching.py can pass real
+content to Phase 5's produce_alert() rather than a bare event_id -- Phase 5's
+RAG/dedup logic needs actual text, not just an ID.
 """
 
 # ---------------------------------------------------------------------------
@@ -32,7 +37,9 @@ WHERE e.processed = true
 RETURN e.event_id AS event_id,
        e.severity AS severity,
        e.source_tier AS source_tier,
-       e.location AS location
+       e.location AS location,
+       e.title AS title,
+       e.description AS description
 """
 # NOTE: the NOT EXISTS guard skips events already scored -- reruns only pick
 # up new events, matching Phase 3's mark_processed pattern. If you change
