@@ -35,7 +35,18 @@ class ObservedComponent(BaseModel):
     lead_time_days: int
     inventory_buffer_days: int
     seeded_risk_level: Optional[str] = None  # static Phase 1 value, never overwritten
+    computed_exposure: Optional["ComputedExposure"] = None 
 
+
+class ComputedExposure(BaseModel):
+    """Graph/formula-derived revenue-at-risk estimate — zero LLM contribution.
+    The agent may only narrate this; it must never emit its own dollar figure."""
+    low: float
+    high: float
+    exposure_days: int
+    effective_days: int
+    exposure_fraction: float
+    basis: str 
 
 class ObservedSupplierAlternative(BaseModel):
     supplier_id: str
@@ -51,7 +62,7 @@ class ObservedProduct(BaseModel):
     annual_revenue_usd: Optional[float] = None
     components: list[ObservedComponent] = Field(default_factory=list)
     alternatives_by_component: dict[str, list[ObservedSupplierAlternative]] = Field(default_factory=dict)
-
+    computed_exposure: Optional["ComputedExposure"] = None   # NEW -- aggregate, worst component
 
 class SimilarEventSummary(BaseModel):
     event_id: str
@@ -71,6 +82,7 @@ class ObservedFacts(BaseModel):
     affected_products: list[ObservedProduct] = Field(default_factory=list)
     similar_past_events: list[SimilarEventSummary] = Field(default_factory=list)
     rag_used_customer_scope: bool = False  # True if customer-tagged hits were found; False = global fallback
+    customer_annual_revenue_usd: Optional[float] = None  # NEW -- ceiling for cross-product aggregation
 
 
 # ---------- AI prediction (LLM-produced, explicitly labeled as such) ----------
@@ -87,15 +99,17 @@ class AIPrediction(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     predicted_business_impact: str
     recommended_actions: list[RecommendedAction] = Field(default_factory=list)
-    evidence: list[str] = Field(default_factory=list)  # which observed facts drove this
+    evidence: list[str]  # which observed facts drove this
 
     @field_validator("evidence")
     @classmethod
     def evidence_must_be_present(cls, v: list[str]) -> list[str]:
-        if not v:
-            raise ValueError("evidence must contain at least one item referencing an observed fact")
-        return v
-
+        cleaned = [item.strip() for item in v if item and item.strip()]
+        if not cleaned:
+            raise ValueError(
+                "evidence must contain at least one non-empty item referencing an observed fact"
+            )
+        return cleaned
 
 # ---------- Combined agent output ----------
 

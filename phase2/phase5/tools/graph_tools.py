@@ -27,6 +27,8 @@ from phase2.phase5.models import (
     ObservedFacts, NarrowingMethod, SimilarEventSummary,
 )
 
+from phase2.phase5.tools.exposure import compute_component_exposure, aggregate_product_exposure
+
 DEDUP_WINDOW_HOURS = 72  # events with matching normalized title within this window
                           # are treated as the same real-world event
 
@@ -47,23 +49,11 @@ def find_existing_assessment(
     driver: Driver, dedup_key: str, customer_id: str, supplier_id: str,
     window_hours: int = DEDUP_WINDOW_HOURS,
 ) -> Optional[str]:
-    """
-    Returns the existing AgentAssessment's assessment_id if one was created for
-    this (customer, title-hash, supplier) combination within the window.
-
-    supplier_id is included deliberately, matching Phase 4's WRITE_IMPACTS
-    merge key ((event_id, customer_id, supplier_id)) — the same real-world
-    event hitting one customer via two different suppliers is two distinct
-    impact paths Phase 4 keeps separate for audit/tuning, and Phase 5 must
-    not silently collapse that granularity via title-based dedup. Title-hash
-    dedup is only meant to catch upstream duplicate GlobalEvent *nodes*
-    (same real event, same supplier, distinct node id) — not distinct
-    supplier matches on the same real event.
-    """
     query = """
     MATCH (a:AgentAssessment {assessment_id: $assessment_id})
     WHERE a.customer_id = $customer_id
       AND a.created_at > datetime() - duration({hours: $window_hours})
+      AND a.status = 'ok'
     RETURN a.assessment_id AS assessment_id
     LIMIT 1
     """
@@ -75,6 +65,71 @@ def find_existing_assessment(
         )
         record = result.single()
         return record["assessment_id"] if record else None
+
+def build_fallback_evidence(observed: "ObservedFacts") -> list[str]:
+    """
+    Deterministic, LLM-free evidence strings derived from ObservedFacts.
+    Used only when the model failed to produce valid evidence after retry —
+    i.e. status=NEEDS_REVIEW — so a human reviewer has concrete graph facts
+    to check against, even though the LLM's severity/impact text is untrusted.
+    """
+    evidence: list[str] = []
+
+    if observed.narrowing_method == NarrowingMethod.SUPPLIER_MATCH:
+        evidence.append(
+            f"Narrowed via direct supplier match; {len(observed.affected_products)} "
+            f"product(s) traced to affected components."
+        )
+    else:
+        evidence.append(
+            "No supplier-level narrowing available — full customer catalog used, "
+            "not a confirmed component-level match."
+        )
+
+    if observed.initial_severity:
+        evidence.append(f"Upstream IMPACTS severity (Phase 4, pre-LLM): {observed.initial_severity}.")
+
+    for product in observed.affected_products:
+        if not product.components:
+            evidence.append(
+                f"Product '{product.name}' ({product.product_id}) linked to supplier "
+                f"but no components resolved on this path."
+            )
+            continue
+        for component in product.components:
+            parts = [
+                f"Component '{component.name}' ({component.component_id}) in '{product.name}': "
+                f"lead_time={component.lead_time_days}d, "
+                f"inventory_buffer={component.inventory_buffer_days}d"
+            ]
+            if component.is_sole_sourced:
+                parts.append("sole-sourced")
+            if component.seeded_risk_level:
+                parts.append(f"seeded risk_level={component.seeded_risk_level}")
+            evidence.append(", ".join(parts) + ".")
+            if component.computed_exposure:
+                ce = component.computed_exposure
+                evidence.append(
+                    f"Computed exposure for '{component.name}': "
+                    f"${ce.low:,.0f}-${ce.high:,.0f} over {ce.effective_days}d ({ce.basis})."
+                )
+        if product.computed_exposure:
+            pe = product.computed_exposure
+            evidence.append(
+                f"Aggregate exposure for '{product.name}': ${pe.low:,.0f}-${pe.high:,.0f} ({pe.basis})."
+            )
+
+    for sim in observed.similar_past_events:
+        if sim.prior_assessment_severity:
+            evidence.append(
+                f"Similar past event '{sim.title}' ({sim.event_id}) previously assessed as "
+                f"{sim.prior_assessment_severity} severity for this customer."
+            )
+
+    if observed.customer_annual_revenue_usd:
+        evidence.append(f"Customer annual revenue baseline: ${observed.customer_annual_revenue_usd:,.0f}.")
+
+    return evidence
 
 
 def link_duplicate_event(driver: Driver, event_id: str, assessment_id: str):
@@ -137,6 +192,12 @@ def get_event_impact_metadata(driver: Driver, event_id: str, customer_id: str) -
         record = result.single()
         return dict(record["props"]) if record else {}
 
+
+def get_customer_revenue(driver: Driver, customer_id: str) -> Optional[float]:
+    query = "MATCH (c:Customer {customer_id: $customer_id}) RETURN c.annual_revenue_usd AS rev"
+    with driver.session() as session:
+        record = session.run(query, customer_id=customer_id).single()
+        return record["rev"] if record else None
 
 def get_customer_product_graph(
     driver: Driver,
@@ -292,10 +353,35 @@ def build_observed_facts(
     products, narrowing = get_customer_product_graph(driver, customer_id, supplier_id)
     similar_events = get_similar_event_context(driver, similar_event_ids, customer_id)
 
+    impact_meta = get_event_impact_metadata(driver, event_id, customer_id)
+    severity = impact_meta.get("severity")
+
+    customer_revenue = get_customer_revenue(driver, customer_id)
+
+    # NEW: attach computed exposure per component, then aggregate to product
+    for product in products:
+        component_exposures = []
+        for component in product.components:
+            alt_bucket = product.alternatives_by_component.get(component.component_id, [])
+            best_alt = alt_bucket[0] if alt_bucket else None
+            component.computed_exposure = compute_component_exposure(
+                annual_revenue_usd=product.annual_revenue_usd,
+                lead_time_days=component.lead_time_days,
+                inventory_buffer_days=component.inventory_buffer_days,
+                is_sole_sourced=component.is_sole_sourced,
+                severity=severity,
+                best_alternative_annual_volume=(best_alt.annual_volume if best_alt else None),
+                required_annual_volume=None,  # not tracked yet -- v2, see note below
+            )
+            component_exposures.append(component.computed_exposure)
+        product.computed_exposure = aggregate_product_exposure(component_exposures)
+
     return ObservedFacts(
         customer_id=customer_id,
         event_id=event_id,
         narrowing_method=narrowing,
+        initial_severity=severity,
         affected_products=products,
         similar_past_events=similar_events,
+        customer_annual_revenue_usd=customer_revenue
     )

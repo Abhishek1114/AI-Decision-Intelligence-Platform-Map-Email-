@@ -30,6 +30,7 @@ from phase2.phase5.tools.graph_tools import (
 from phase2.phase5.tools.rag_tools import query_similar_events, tag_event_for_customer
 from phase2.phase5.tools.groq_client import call_groq_structured
 from phase2.phase5.tools.persist import persist_agent_assessment
+from phase2.phase5.tools.graph_tools import build_fallback_evidence
 
 from langgraph.graph import StateGraph, END
 
@@ -47,8 +48,16 @@ Rules:
 - severity and confidence are YOUR assessment, not restated facts.
 - evidence[] must reference specific observed facts (component names, buffer days, etc.)
   that drove your reasoning — do not invent facts not present in the input.
+- evidence[] must NOT be empty if any observed facts were used to justify severity,
+  confidence, or recommended_actions. If you cited a metric anywhere in your reasoning
+  (e.g. congestion_index, average wait time, buffer days, lead times), it must also
+  appear in evidence[].
+- Only return evidence: [] if observed facts were genuinely insufficient to reason about
+  impact at all — in that case, also lower confidence accordingly.
 - Do not restate inventory_buffer_days or lead_time_days as if they were your prediction;
   those are already known. Predict what happens GIVEN those numbers and this event.
+- Do not calculate or invent dollar figures. Reference computed_exposure verbatim if 
+  discussing financial impact.
 """
 
 
@@ -69,7 +78,7 @@ class AgentState(TypedDict):
     assessment_id: Optional[str]
 
 
-def build_graph(driver: Driver, chroma_client: chromadb.HttpClient, groq_client: Groq):
+def build_graph(driver: Driver, chroma_client: chromadb.HttpClient, groq_client: Groq,redis_client=None):
 
     def check_duplicate(state: AgentState) -> AgentState:
         dedup_key = compute_dedup_key(state["event_title"])
@@ -118,10 +127,21 @@ def build_graph(driver: Driver, chroma_client: chromadb.HttpClient, groq_client:
         )
 
         if parsed is None:
-            logger.error(
-                f"Agent run needs_review for customer={state['customer_id']} "
-                f"event={state['event_id']}. Raw output logged."
-            )
+            fallback_evidence = build_fallback_evidence(observed)
+            if fallback_evidence:
+                # We still don't trust the model's severity/confidence/impact text
+                # since it never validated — but we can at least surface graph
+                # facts rather than nothing, and keep status honestly flagged.
+                logger.error(
+                    f"Agent run needs_review for customer={state['customer_id']} "
+                    f"event={state['event_id']} — model never returned valid evidence. "
+                    f"Backfilled {len(fallback_evidence)} fact(s) from graph for manual review."
+                )
+            else:
+                logger.error(
+                    f"Agent run needs_review for customer={state['customer_id']} "
+                    f"event={state['event_id']}. No graph facts available either."
+                )
             return {**state, "prediction": None, "status": AgentRunStatus.NEEDS_REVIEW,
                     "raw_llm_output": raw}
 
@@ -135,7 +155,8 @@ def build_graph(driver: Driver, chroma_client: chromadb.HttpClient, groq_client:
             status=state["status"],
             raw_llm_output=state["raw_llm_output"],
         )
-        assessment_id = persist_agent_assessment(driver, output, state["dedup_key"], state["supplier_id"])
+        assessment_id = persist_agent_assessment(driver, output, state["dedup_key"], state["supplier_id"],
+        redis_client=redis_client)
 
         # Incremental customer-scoped RAG tagging — only for genuinely new
         # (non-duplicate) events, so we don't spam near-identical duplicate
@@ -178,8 +199,9 @@ def run_agent_for_impact(
     supplier_id: str,
     event_title: str,
     event_text: str,
+    redis_client=None,
 ) -> AgentOutput:
-    compiled = build_graph(driver, chroma_client, groq_client)
+    compiled = build_graph(driver, chroma_client, groq_client,redis_client=redis_client)
     initial_state: AgentState = {
         "customer_id": customer_id,
         "event_id": event_id,

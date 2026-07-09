@@ -30,8 +30,18 @@ def fetch_recent_earthquakes(hours_back: int = 1) -> List[dict]:
             data = response.json()
             features = data.get("features", [])
             # Feed includes all significant EQs — still apply magnitude filter
-            return [f for f in features
-                    if f["properties"].get("mag", 0) >= MIN_MAGNITUDE]
+            filtered = []
+
+            for f in features:
+                mag = f.get("properties", {}).get("mag")
+
+                if mag is None:
+                    continue
+
+                if mag >= MIN_MAGNITUDE:
+                    filtered.append(f)
+
+            return filtered
 
     # Fallback: parameterised historical query (original code unchanged below)
     end_time   = datetime.utcnow()
@@ -56,7 +66,7 @@ def normalise_usgs(feature: dict) -> dict:
     coords = feature["geometry"]["coordinates"]  # [lon, lat, depth]
     longitude, latitude = coords[0], coords[1]
 
-    magnitude = props.get("mag", 0.0)
+    magnitude = props.get("mag") or 0.0
     place     = props.get("place", "Unknown")
     title     = f"Earthquake M{magnitude} — {place}"
     occurred  = datetime.utcfromtimestamp(

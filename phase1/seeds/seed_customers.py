@@ -830,6 +830,518 @@ def seed_skybridge_aerospace(repo: CustomerDigitalTwinRepository) -> str:
     return cid
 
 
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Customer 5 — Andina Copper Corp
+# ─────────────────────────────────────────────────────────────────────────────
+
+def seed_andina_copper(repo: CustomerDigitalTwinRepository) -> str:
+    """Copper mining/refining — Chile, one of the world's most seismically
+    active countries (Nazca-South American subduction zone). Real earthquake
+    news and real mine-strike news both hit this customer regularly."""
+    print("\n── Seeding Andina Copper Corp ──")
+    cid = "cust_andina_001"
+
+    repo.upsert_customer(Customer(
+        customer_id=cid, company_name="Andina Copper Corp.",
+        industry=IndustryVertical.MINING,  # TODO: confirm this enum value exists
+        headquarters_country="Chile", headquarters_city="Santiago",
+        contact_email="supplychain@andinacopper.cl",
+        annual_revenue_usd=14_000_000_000,
+    ))
+    print("  Customer: Andina Copper Corp")
+
+    prod_wire = Product(customer_id=cid, product_id="prod_and_wirerod",
+        name="Copper Wire Rod (Grade A)", sku="CWR-A-8MM",
+        category="refined_copper", annual_revenue_usd=9_000_000_000,
+        risk_level=RiskLevel.HIGH)
+    prod_cathode = Product(customer_id=cid, product_id="prod_and_cathode",
+        name="Copper Cathode 99.99%", sku="CAT-999",
+        category="refined_copper", annual_revenue_usd=5_000_000_000)
+    for p in [prod_wire, prod_cathode]:
+        repo.upsert_product(p)
+        print(f"  Product: {p.name}")
+
+    comp_ore = Component(customer_id=cid, component_id="comp_and_ore",
+        name="Copper Ore Concentrate", category="raw_material",
+        is_sole_sourced=True, lead_time_days=21, inventory_buffer_days=10,
+        risk_level=RiskLevel.CRITICAL)
+    comp_acid = Component(customer_id=cid, component_id="comp_and_acid",
+        name="Sulfuric Acid (leaching agent)", category="chemical",
+        is_sole_sourced=False, lead_time_days=14, inventory_buffer_days=21)
+    for c in [comp_ore, comp_acid]:
+        repo.upsert_component(c)
+        print(f"  Component: {c.name}")
+
+    repo.link_product_to_component(cid, "prod_and_wirerod", "comp_and_ore", 1)
+    repo.link_product_to_component(cid, "prod_and_cathode", "comp_and_ore", 1)
+    repo.link_product_to_component(cid, "prod_and_cathode", "comp_and_acid", 1)
+
+    # ── Tier 1 Suppliers ──────────────────────────────────────────────────────
+    supp_codelco = Supplier(customer_id=cid, supplier_id="supp_and_escondida",
+        company_name="Minera Escondida (BHP)", tier=SupplierTier.TIER_1,
+        country="Chile", city="Antofagasta",
+        latitude=-24.2667, longitude=-69.0667,
+        contract_value_usd=4_500_000_000,
+        lead_time_days=21, on_time_delivery_rate=0.90, quality_score=0.96,
+        risk_level=RiskLevel.CRITICAL, is_sole_source=True)
+    supp_anglo = Supplier(customer_id=cid, supplier_id="supp_and_anglo",
+        company_name="Anglo American Sur", tier=SupplierTier.TIER_1,
+        country="Chile", city="Los Bronces",
+        latitude=-33.1500, longitude=-70.2833,
+        contract_value_usd=1_800_000_000,
+        lead_time_days=18, on_time_delivery_rate=0.92, quality_score=0.97,
+        risk_level=RiskLevel.HIGH)
+    for sup in [supp_codelco, supp_anglo]:
+        repo.upsert_supplier(sup)
+        print(f"  Supplier T1: {sup.company_name}")
+
+    repo.link_supplier_to_component(cid, "supp_and_escondida", "comp_and_ore", annual_volume=1_200_000)
+    repo.link_supplier_to_component(cid, "supp_and_anglo",     "comp_and_ore", annual_volume=180_000)
+
+    # ── Tier 2 ────────────────────────────────────────────────────────────────
+    # Chemours/Quimetal → Escondida: sulfuric acid, itself a byproduct of
+    # smelting elsewhere — port disruption at Antofagasta/Mejillones chokes it.
+    supp_quimetal = Supplier(customer_id=cid, supplier_id="supp_and_quimetal",
+        company_name="Quimetal Industrial", tier=SupplierTier.TIER_2,
+        country="Chile", city="Mejillones",
+        latitude=-23.1000, longitude=-70.4500,
+        contract_value_usd=120_000_000,
+        lead_time_days=14, on_time_delivery_rate=0.88, quality_score=0.94,
+        risk_level=RiskLevel.HIGH)
+    repo.upsert_supplier(supp_quimetal)
+    print(f"  Supplier T2: {supp_quimetal.company_name} → feeds Escondida")
+    _link_tier2_feeds_tier1(repo, cid, "supp_and_quimetal", "supp_and_escondida")
+
+    fact_esc = Factory(customer_id=cid, factory_id="fact_and_escondida",
+        name="Escondida Concentrator & SX-EW Plant", supplier_id="supp_and_escondida",
+        country="Chile", city="Antofagasta",
+        latitude=-24.2667, longitude=-69.0667,
+        capacity_utilisation=0.89, workforce_size=7000, risk_level=RiskLevel.CRITICAL)
+    repo.upsert_factory(fact_esc)
+    print(f"  Factory: {fact_esc.name}")
+    repo.link_factory_produces_component(cid, "fact_and_escondida", "comp_and_ore")
+
+    port_ant = Port(customer_id=cid, port_id="port_and_ant",
+        name="Puerto Antofagasta", un_locode="CLANF",
+        country="Chile", city="Antofagasta",
+        latitude=-23.6509, longitude=-70.3975,
+        port_type="sea", annual_throughput_teu=450_000)
+    port_shg = Port(customer_id=cid, port_id="port_and_shg",
+        name="Port of Shanghai (offtake)", un_locode="CNSHA",
+        country="China", city="Shanghai",
+        latitude=31.3697, longitude=121.5966,
+        port_type="sea", annual_throughput_teu=47_000_000)
+    for p in [port_ant, port_shg]:
+        repo.upsert_port(p)
+        print(f"  Port: {p.name}")
+    repo.link_factory_ships_via_port(cid, "fact_and_escondida", "port_and_ant")
+
+    wh = Warehouse(customer_id=cid, warehouse_id="wh_and_ant",
+        name="Antofagasta Cathode Storage", country="Chile", city="Antofagasta",
+        latitude=-23.6500, longitude=-70.4000, type="warehouse",
+        capacity_sqm=18000, inventory_buffer_days=14)
+    repo.upsert_warehouse(wh)
+    print(f"  Warehouse: {wh.name}")
+
+    route = Route(customer_id=cid, route_id="route_and_cl_cn",
+        name="Antofagasta → Shanghai (Sea)",
+        origin_node_id="port_and_ant", origin_node_type="Port",
+        destination_node_id="port_and_shg", destination_node_type="Port",
+        transport_mode=TransportMode.SEA, transit_time_days=32,
+        carrier="COSCO Shipping", annual_shipment_volume=600)
+    repo.upsert_route(route)
+    print(f"  Route: {route.name}")
+
+    print("  ✓ Andina Copper Corp complete (1 Tier 2: Quimetal → Escondida)")
+    return cid
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Customer 6 — Cascade Memory Corp
+# ─────────────────────────────────────────────────────────────────────────────
+
+def seed_cascade_memory(repo: CustomerDigitalTwinRepository) -> str:
+    """Memory-chip manufacturer — Taiwan + Japan fabs. Distinct component/product
+    from Apex (memory vs. logic) despite overlapping earthquake geography, so
+    the two customers are genuinely different graphs, not near-duplicates."""
+    print("\n── Seeding Cascade Memory Corp ──")
+    cid = "cust_cascade_001"
+
+    repo.upsert_customer(Customer(
+        customer_id=cid, company_name="Cascade Memory Corp.",
+        industry=IndustryVertical.ELECTRONICS,
+        headquarters_country="United States", headquarters_city="Boise",
+        contact_email="supplychain@cascadememory.com",
+        annual_revenue_usd=22_000_000_000,
+    ))
+    print("  Customer: Cascade Memory Corp")
+
+    prod_dram = Product(customer_id=cid, product_id="prod_cas_dram",
+        name="DDR5 Server DRAM Module", sku="DDR5-64GB-RDIMM",
+        category="memory", annual_revenue_usd=14_000_000_000,
+        risk_level=RiskLevel.HIGH)
+    prod_nand = Product(customer_id=cid, product_id="prod_cas_nand",
+        name="NAND Flash SSD (Enterprise)", sku="NAND-4TB-U2",
+        category="memory", annual_revenue_usd=8_000_000_000)
+    for p in [prod_dram, prod_nand]:
+        repo.upsert_product(p)
+        print(f"  Product: {p.name}")
+
+    comp_wafer = Component(customer_id=cid, component_id="comp_cas_wafer",
+        name="300mm DRAM Wafer", category="semiconductor",
+        is_sole_sourced=True, lead_time_days=100, inventory_buffer_days=18,
+        risk_level=RiskLevel.CRITICAL)
+    comp_substrate = Component(customer_id=cid, component_id="comp_cas_substrate",
+        name="BGA Package Substrate", category="packaging",
+        is_sole_sourced=False, lead_time_days=50, inventory_buffer_days=25)
+    for c in [comp_wafer, comp_substrate]:
+        repo.upsert_component(c)
+        print(f"  Component: {c.name}")
+
+    repo.link_product_to_component(cid, "prod_cas_dram", "comp_cas_wafer", 1)
+    repo.link_product_to_component(cid, "prod_cas_dram", "comp_cas_substrate", 1)
+    repo.link_product_to_component(cid, "prod_cas_nand", "comp_cas_wafer", 1)
+
+    # ── Tier 1 ────────────────────────────────────────────────────────────────
+    supp_micron_tw = Supplier(customer_id=cid, supplier_id="supp_cas_micron_tw",
+        company_name="Micron Taiwan Fab", tier=SupplierTier.TIER_1,
+        country="Taiwan", city="Taichung",
+        latitude=24.1477, longitude=120.6736,
+        contract_value_usd=6_000_000_000,
+        lead_time_days=100, on_time_delivery_rate=0.94, quality_score=0.98,
+        risk_level=RiskLevel.HIGH, is_sole_source=True)
+    supp_kioxia = Supplier(customer_id=cid, supplier_id="supp_cas_kioxia",
+        company_name="Kioxia Corporation", tier=SupplierTier.TIER_1,
+        country="Japan", city="Yokkaichi",
+        latitude=34.9650, longitude=136.6253,
+        contract_value_usd=3_200_000_000,
+        lead_time_days=90, on_time_delivery_rate=0.95, quality_score=0.99,
+        risk_level=RiskLevel.HIGH)
+    for sup in [supp_micron_tw, supp_kioxia]:
+        repo.upsert_supplier(sup)
+        print(f"  Supplier T1: {sup.company_name}")
+
+    repo.link_supplier_to_component(cid, "supp_cas_micron_tw", "comp_cas_wafer", annual_volume=40_000_000)
+    repo.link_supplier_to_component(cid, "supp_cas_kioxia",    "comp_cas_wafer", annual_volume=25_000_000)
+
+    # ── Tier 2 ────────────────────────────────────────────────────────────────
+    # Shin-Etsu again appears here as a real-world fact (dominant global
+    # silicon wafer supplier) — deliberately reused across customers, same as
+    # in reality; not a graph bug if it shows up more than once.
+    supp_sumco = Supplier(customer_id=cid, supplier_id="supp_cas_sumco",
+        company_name="SUMCO Corporation", tier=SupplierTier.TIER_2,
+        country="Japan", city="Saga",
+        latitude=33.2494, longitude=130.2988,
+        contract_value_usd=900_000_000,
+        lead_time_days=75, on_time_delivery_rate=0.96, quality_score=0.99,
+        risk_level=RiskLevel.CRITICAL, is_sole_source=True)
+    repo.upsert_supplier(supp_sumco)
+    print(f"  Supplier T2: {supp_sumco.company_name} → feeds Micron Taiwan")
+    _link_tier2_feeds_tier1(repo, cid, "supp_cas_sumco", "supp_cas_micron_tw")
+
+    fact_mtw = Factory(customer_id=cid, factory_id="fact_cas_mtw",
+        name="Micron Taichung Fab 11", supplier_id="supp_cas_micron_tw",
+        country="Taiwan", city="Taichung",
+        latitude=24.1477, longitude=120.6736,
+        capacity_utilisation=0.92, workforce_size=6000, risk_level=RiskLevel.HIGH)
+    repo.upsert_factory(fact_mtw)
+    print(f"  Factory: {fact_mtw.name}")
+    repo.link_factory_produces_component(cid, "fact_cas_mtw", "comp_cas_wafer")
+
+    port_tc = Port(customer_id=cid, port_id="port_cas_tc",
+        name="Port of Taichung", un_locode="TWTXG",
+        country="Taiwan", city="Taichung",
+        latitude=24.2833, longitude=120.5167,
+        port_type="sea", annual_throughput_teu=1_800_000)
+    port_oak = Port(customer_id=cid, port_id="port_cas_oak",
+        name="Port of Oakland", un_locode="USOAK",
+        country="United States", city="Oakland",
+        latitude=37.7955, longitude=-122.2781,
+        port_type="sea", annual_throughput_teu=2_400_000)
+    for p in [port_tc, port_oak]:
+        repo.upsert_port(p)
+        print(f"  Port: {p.name}")
+    repo.link_factory_ships_via_port(cid, "fact_cas_mtw", "port_cas_tc")
+
+    wh = Warehouse(customer_id=cid, warehouse_id="wh_cas_boise",
+        name="Cascade Boise Distribution Hub", country="United States", city="Boise",
+        latitude=43.6150, longitude=-116.2023, type="distribution_center",
+        capacity_sqm=32000, inventory_buffer_days=18)
+    repo.upsert_warehouse(wh)
+    print(f"  Warehouse: {wh.name}")
+
+    route = Route(customer_id=cid, route_id="route_cas_tw_us",
+        name="Taichung → Oakland (Sea)",
+        origin_node_id="port_cas_tc", origin_node_type="Port",
+        destination_node_id="port_cas_oak", destination_node_type="Port",
+        transport_mode=TransportMode.SEA, transit_time_days=15,
+        carrier="Evergreen Marine", annual_shipment_volume=1400)
+    repo.upsert_route(route)
+    print(f"  Route: {route.name}")
+
+    print("  ✓ Cascade Memory Corp complete (1 Tier 2: SUMCO → Micron Taiwan)")
+    return cid
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Customer 7 — Monsoon Apparel Group
+# ─────────────────────────────────────────────────────────────────────────────
+
+def seed_monsoon_apparel(repo: CustomerDigitalTwinRepository) -> str:
+    """Garment manufacturer — Bangladesh + Vietnam. Sits directly in the
+    annual Bay of Bengal cyclone corridor and Vietnam's typhoon/monsoon-flood
+    season, both heavily covered in weather-news feeds."""
+    print("\n── Seeding Monsoon Apparel Group ──")
+    cid = "cust_monsoon_001"
+
+    repo.upsert_customer(Customer(
+        customer_id=cid, company_name="Monsoon Apparel Group",
+        industry=IndustryVertical.APPAREL,  # TODO: confirm this enum value exists
+        headquarters_country="United Kingdom", headquarters_city="London",
+        contact_email="supplychain@monsoonapparel.co.uk",
+        annual_revenue_usd=6_500_000_000,
+    ))
+    print("  Customer: Monsoon Apparel Group")
+
+    prod_tshirt = Product(customer_id=cid, product_id="prod_mon_tshirt",
+        name="Cotton Basics T-Shirt Line", sku="CBT-ALLCOLOR",
+        category="apparel", annual_revenue_usd=2_800_000_000)
+    prod_denim = Product(customer_id=cid, product_id="prod_mon_denim",
+        name="Denim Jeans Line", sku="DNM-STRAIGHT",
+        category="apparel", annual_revenue_usd=1_900_000_000,
+        risk_level=RiskLevel.MEDIUM)
+    for p in [prod_tshirt, prod_denim]:
+        repo.upsert_product(p)
+        print(f"  Product: {p.name}")
+
+    comp_cotton = Component(customer_id=cid, component_id="comp_mon_cotton",
+        name="Woven Cotton Fabric", category="textile",
+        is_sole_sourced=False, lead_time_days=45, inventory_buffer_days=30,
+        risk_level=RiskLevel.HIGH)
+    comp_denimfab = Component(customer_id=cid, component_id="comp_mon_denimfab",
+        name="Raw Denim Fabric", category="textile",
+        is_sole_sourced=False, lead_time_days=50, inventory_buffer_days=30)
+    comp_dye = Component(customer_id=cid, component_id="comp_mon_dye",
+        name="Reactive Dye Compound", category="chemical",
+        is_sole_sourced=False, lead_time_days=21, inventory_buffer_days=25)
+    for c in [comp_cotton, comp_denimfab, comp_dye]:
+        repo.upsert_component(c)
+        print(f"  Component: {c.name}")
+
+    repo.link_product_to_component(cid, "prod_mon_tshirt", "comp_mon_cotton", 1)
+    repo.link_product_to_component(cid, "prod_mon_tshirt", "comp_mon_dye", 1)
+    repo.link_product_to_component(cid, "prod_mon_denim",  "comp_mon_denimfab", 1)
+    repo.link_product_to_component(cid, "prod_mon_denim",  "comp_mon_dye", 1)
+
+    # ── Tier 1 ────────────────────────────────────────────────────────────────
+    supp_dhaka = Supplier(customer_id=cid, supplier_id="supp_mon_dhaka",
+        company_name="Dhaka Garments Consortium", tier=SupplierTier.TIER_1,
+        country="Bangladesh", city="Dhaka",
+        latitude=23.8103, longitude=90.4125,
+        contract_value_usd=900_000_000,
+        lead_time_days=45, on_time_delivery_rate=0.87, quality_score=0.90,
+        risk_level=RiskLevel.HIGH, is_sole_source=True)
+    supp_hcm = Supplier(customer_id=cid, supplier_id="supp_mon_hcm",
+        company_name="Saigon Denim Works", tier=SupplierTier.TIER_1,
+        country="Vietnam", city="Ho Chi Minh City",
+        latitude=10.8231, longitude=106.6297,
+        contract_value_usd=650_000_000,
+        lead_time_days=50, on_time_delivery_rate=0.89, quality_score=0.93,
+        risk_level=RiskLevel.MEDIUM)
+    for sup in [supp_dhaka, supp_hcm]:
+        repo.upsert_supplier(sup)
+        print(f"  Supplier T1: {sup.company_name}")
+
+    repo.link_supplier_to_component(cid, "supp_mon_dhaka", "comp_mon_cotton",   annual_volume=8_000_000)
+    repo.link_supplier_to_component(cid, "supp_mon_hcm",   "comp_mon_denimfab", annual_volume=4_500_000)
+
+    # ── Tier 2 ────────────────────────────────────────────────────────────────
+    # Vardhman Textiles → Dhaka Garments: raw cotton yarn spun in India,
+    # shipped in via Chittagong — cyclone landfall near Chittagong is one
+    # of the most common real disruption events in this corridor.
+    supp_vardhman = Supplier(customer_id=cid, supplier_id="supp_mon_vardhman",
+        company_name="Vardhman Textiles Ltd.", tier=SupplierTier.TIER_2,
+        country="India", city="Ludhiana",
+        latitude=30.9010, longitude=75.8573,
+        contract_value_usd=210_000_000,
+        lead_time_days=30, on_time_delivery_rate=0.90, quality_score=0.92,
+        risk_level=RiskLevel.HIGH)
+    repo.upsert_supplier(supp_vardhman)
+    print(f"  Supplier T2: {supp_vardhman.company_name} → feeds Dhaka Garments")
+    _link_tier2_feeds_tier1(repo, cid, "supp_mon_vardhman", "supp_mon_dhaka")
+
+    fact_dhk = Factory(customer_id=cid, factory_id="fact_mon_dhaka",
+        name="Dhaka Garments Main Facility", supplier_id="supp_mon_dhaka",
+        country="Bangladesh", city="Dhaka",
+        latitude=23.8103, longitude=90.4125,
+        capacity_utilisation=0.85, workforce_size=18000, risk_level=RiskLevel.HIGH)
+    repo.upsert_factory(fact_dhk)
+    print(f"  Factory: {fact_dhk.name}")
+    repo.link_factory_produces_component(cid, "fact_mon_dhaka", "comp_mon_cotton")
+
+    port_ctg = Port(customer_id=cid, port_id="port_mon_ctg",
+        name="Chittagong Port", un_locode="BDCGP",
+        country="Bangladesh", city="Chittagong",
+        latitude=22.3569, longitude=91.7832,
+        port_type="sea", annual_throughput_teu=3_200_000)
+    port_fel = Port(customer_id=cid, port_id="port_mon_fel",
+        name="Port of Felixstowe", un_locode="GBFXT",
+        country="United Kingdom", city="Felixstowe",
+        latitude=51.9539, longitude=1.3512,
+        port_type="sea", annual_throughput_teu=4_000_000)
+    for p in [port_ctg, port_fel]:
+        repo.upsert_port(p)
+        print(f"  Port: {p.name}")
+    repo.link_factory_ships_via_port(cid, "fact_mon_dhaka", "port_mon_ctg")
+
+    wh = Warehouse(customer_id=cid, warehouse_id="wh_mon_uk",
+        name="Monsoon UK Central Warehouse", country="United Kingdom", city="Milton Keynes",
+        latitude=52.0406, longitude=-0.7594, type="distribution_center",
+        capacity_sqm=25000, inventory_buffer_days=30)
+    repo.upsert_warehouse(wh)
+    print(f"  Warehouse: {wh.name}")
+
+    route = Route(customer_id=cid, route_id="route_mon_bd_uk",
+        name="Chittagong → Felixstowe (Sea)",
+        origin_node_id="port_mon_ctg", origin_node_type="Port",
+        destination_node_id="port_mon_fel", destination_node_type="Port",
+        transport_mode=TransportMode.SEA, transit_time_days=28,
+        carrier="Maersk", annual_shipment_volume=900)
+    repo.upsert_route(route)
+    print(f"  Route: {route.name}")
+
+    print("  ✓ Monsoon Apparel Group complete (1 Tier 2: Vardhman → Dhaka Garments)")
+    return cid
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Customer 8 — Pacific Rim AgriFoods
+# ─────────────────────────────────────────────────────────────────────────────
+
+def seed_pacific_rim_agrifoods(repo: CustomerDigitalTwinRepository) -> str:
+    """Palm oil + rice — Indonesia + Philippines. Ring of Fire (earthquakes,
+    active volcanoes) plus the West Pacific typhoon belt — likely the
+    highest-frequency real-world disruption exposure of all 8 customers."""
+    print("\n── Seeding Pacific Rim AgriFoods ──")
+    cid = "cust_pacrim_001"
+
+    repo.upsert_customer(Customer(
+        customer_id=cid, company_name="Pacific Rim AgriFoods Ltd.",
+        industry=IndustryVertical.AGRICULTURE,  # TODO: confirm this enum value exists
+        headquarters_country="Singapore", headquarters_city="Singapore",
+        contact_email="supplychain@pacrimagrifoods.sg",
+        annual_revenue_usd=9_200_000_000,
+    ))
+    print("  Customer: Pacific Rim AgriFoods")
+
+    prod_palmoil = Product(customer_id=cid, product_id="prod_pr_palmoil",
+        name="Refined Palm Oil (RBD)", sku="RBD-PO-1000L",
+        category="edible_oil", annual_revenue_usd=6_000_000_000,
+        risk_level=RiskLevel.HIGH)
+    prod_rice = Product(customer_id=cid, product_id="prod_pr_rice",
+        name="Milled White Rice", sku="RICE-25KG",
+        category="grain", annual_revenue_usd=3_200_000_000)
+    for p in [prod_palmoil, prod_rice]:
+        repo.upsert_product(p)
+        print(f"  Product: {p.name}")
+
+    comp_ffb = Component(customer_id=cid, component_id="comp_pr_ffb",
+        name="Fresh Fruit Bunches (Palm)", category="raw_material",
+        is_sole_sourced=False, lead_time_days=7, inventory_buffer_days=5,
+        risk_level=RiskLevel.CRITICAL)
+    comp_paddy = Component(customer_id=cid, component_id="comp_pr_paddy",
+        name="Unmilled Paddy Rice", category="raw_material",
+        is_sole_sourced=False, lead_time_days=14, inventory_buffer_days=20,
+        risk_level=RiskLevel.HIGH)
+    for c in [comp_ffb, comp_paddy]:
+        repo.upsert_component(c)
+        print(f"  Component: {c.name}")
+
+    repo.link_product_to_component(cid, "prod_pr_palmoil", "comp_pr_ffb", 1)
+    repo.link_product_to_component(cid, "prod_pr_rice",    "comp_pr_paddy", 1)
+
+    # ── Tier 1 ────────────────────────────────────────────────────────────────
+    supp_sinarmas = Supplier(customer_id=cid, supplier_id="supp_pr_sinarmas",
+        company_name="Sinar Mas Agro", tier=SupplierTier.TIER_1,
+        country="Indonesia", city="Pekanbaru",
+        latitude=0.5333, longitude=101.4500,
+        contract_value_usd=2_200_000_000,
+        lead_time_days=7, on_time_delivery_rate=0.86, quality_score=0.91,
+        risk_level=RiskLevel.CRITICAL, is_sole_source=True)
+    supp_nfa = Supplier(customer_id=cid, supplier_id="supp_pr_luzon",
+        company_name="Central Luzon Rice Millers Coop", tier=SupplierTier.TIER_1,
+        country="Philippines", city="San Fernando",
+        latitude=15.0286, longitude=120.6898,
+        contract_value_usd=680_000_000,
+        lead_time_days=14, on_time_delivery_rate=0.84, quality_score=0.89,
+        risk_level=RiskLevel.HIGH)
+    for sup in [supp_sinarmas, supp_nfa]:
+        repo.upsert_supplier(sup)
+        print(f"  Supplier T1: {sup.company_name}")
+
+    repo.link_supplier_to_component(cid, "supp_pr_sinarmas", "comp_pr_ffb",   annual_volume=3_500_000)
+    repo.link_supplier_to_component(cid, "supp_pr_luzon",    "comp_pr_paddy", annual_volume=900_000)
+
+    # ── Tier 2 ────────────────────────────────────────────────────────────────
+    # Riau smallholder cooperatives feed Sinar Mas's mills — Sumatra sits on
+    # an active fault + is regularly affected by haze/flooding events that
+    # make real news; kept as a Tier 2 to mirror the FEEDS pattern.
+    supp_riau = Supplier(customer_id=cid, supplier_id="supp_pr_riau",
+        company_name="Riau Smallholder Cooperative", tier=SupplierTier.TIER_2,
+        country="Indonesia", city="Riau",
+        latitude=0.2933, longitude=101.7068,
+        contract_value_usd=140_000_000,
+        lead_time_days=5, on_time_delivery_rate=0.80, quality_score=0.85,
+        risk_level=RiskLevel.HIGH)
+    repo.upsert_supplier(supp_riau)
+    print(f"  Supplier T2: {supp_riau.company_name} → feeds Sinar Mas Agro")
+    _link_tier2_feeds_tier1(repo, cid, "supp_pr_riau", "supp_pr_sinarmas")
+
+    fact_pek = Factory(customer_id=cid, factory_id="fact_pr_pekanbaru",
+        name="Sinar Mas Pekanbaru Refinery", supplier_id="supp_pr_sinarmas",
+        country="Indonesia", city="Pekanbaru",
+        latitude=0.5333, longitude=101.4500,
+        capacity_utilisation=0.90, workforce_size=2600, risk_level=RiskLevel.CRITICAL)
+    repo.upsert_factory(fact_pek)
+    print(f"  Factory: {fact_pek.name}")
+    repo.link_factory_produces_component(cid, "fact_pr_pekanbaru", "comp_pr_ffb")
+
+    port_dumai = Port(customer_id=cid, port_id="port_pr_dumai",
+        name="Port of Dumai", un_locode="IDDUM",
+        country="Indonesia", city="Dumai",
+        latitude=1.6667, longitude=101.4500,
+        port_type="sea", annual_throughput_teu=850_000)
+    port_sg = Port(customer_id=cid, port_id="port_pr_sg",
+        name="Port of Singapore", un_locode="SGSIN",
+        country="Singapore", city="Singapore",
+        latitude=1.2644, longitude=103.8200,
+        port_type="sea", annual_throughput_teu=37_000_000)
+    for p in [port_dumai, port_sg]:
+        repo.upsert_port(p)
+        print(f"  Port: {p.name}")
+    repo.link_factory_ships_via_port(cid, "fact_pr_pekanbaru", "port_pr_dumai")
+
+    wh = Warehouse(customer_id=cid, warehouse_id="wh_pr_sg",
+        name="Pacific Rim Singapore Bulk Terminal", country="Singapore", city="Singapore",
+        latitude=1.2900, longitude=103.8000, type="distribution_center",
+        capacity_sqm=40000, inventory_buffer_days=10)
+    repo.upsert_warehouse(wh)
+    print(f"  Warehouse: {wh.name}")
+
+    route = Route(customer_id=cid, route_id="route_pr_id_sg",
+        name="Dumai → Singapore (Sea)",
+        origin_node_id="port_pr_dumai", origin_node_type="Port",
+        destination_node_id="port_pr_sg", destination_node_type="Port",
+        transport_mode=TransportMode.SEA, transit_time_days=2,
+        carrier="Pacific International Lines", annual_shipment_volume=3600)
+    repo.upsert_route(route)
+    print(f"  Route: {route.name}")
+
+    print("  ✓ Pacific Rim AgriFoods complete (1 Tier 2: Riau Coop → Sinar Mas)")
+    return cid
 # ─────────────────────────────────────────────────────────────────────────────
 # main()
 # ─────────────────────────────────────────────────────────────────────────────
@@ -846,6 +1358,11 @@ def main():
     seed_novara_pharma(repo)
     seed_volta_motors(repo)
     seed_skybridge_aerospace(repo)
+
+    seed_andina_copper(repo)
+    seed_cascade_memory(repo)
+    seed_monsoon_apparel(repo)
+    seed_pacific_rim_agrifoods(repo)
 
     print("\n" + "="*60)
     print("All 4 customer digital twins loaded.")

@@ -24,6 +24,8 @@ RUN pip install --no-cache-dir rapidfuzz==3.*
 #Phase 5 dependencies:
 RUN pip install --no-cache-dir langgraph>=0.2 groq>=0.11 chromadb>=0.5 
 
+RUN pip install --no-cache-dir reportlab==4.*
+
 # Layer 6: pre-download embedding model weights into the image
 # (bakes ~90MB into a cached layer instead of downloading on first DAG run)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"

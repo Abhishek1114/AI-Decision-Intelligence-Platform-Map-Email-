@@ -35,6 +35,7 @@ def main():
         result = run_agent_for_impact(
             neo4j_driver, chroma_client, groq_client, customer_id, event_id,
             supplier_id, title, event_text,
+            redis_client=redis_client,
         )
         if result.status.value == "needs_review":
             logger.warning(f"needs_review: customer={customer_id} event={event_id}")

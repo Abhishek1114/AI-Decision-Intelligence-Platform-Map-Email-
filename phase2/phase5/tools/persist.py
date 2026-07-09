@@ -34,13 +34,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 from phase2.phase5.models import AgentOutput
+from phase2.phase5.streaming.redis_stream import produce_assessment_created
 
 
 def build_assessment_id(dedup_key: str, customer_id: str, supplier_id: str) -> str:
     return f"assess_{dedup_key}_{customer_id}_{supplier_id}"
 
 
-def persist_agent_assessment(driver: Driver, output: AgentOutput, dedup_key: str, supplier_id: str) -> str:
+def persist_agent_assessment(driver: Driver, output: AgentOutput, dedup_key: str,
+     supplier_id: str,redis_client=None,) -> str:
     observed = output.observed
     prediction = output.prediction
 
@@ -128,4 +130,13 @@ def persist_agent_assessment(driver: Driver, output: AgentOutput, dedup_key: str
     with driver.session() as session:
         result = session.run(query, **params)
         record = result.single()
-        return record["assessment_id"]
+        assessment_id = record["assessment_id"]
+
+    if redis_client is not None:
+        produce_assessment_created(
+            redis_client, assessment_id, observed.customer_id,
+            initial_severity, output.status.value,
+            observed.event_id,
+        )
+
+    return assessment_id

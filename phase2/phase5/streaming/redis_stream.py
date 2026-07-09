@@ -22,6 +22,12 @@ STREAM_NAME = "supply_chain:alerts"
 CONSUMER_GROUP = "phase5_agent_workers"
 CONSUMER_NAME = "worker-1"
 
+# Phase 7 — second stream, Phase 5 -> Phase 7, "an AgentAssessment now exists".
+# Separate from STREAM_NAME above (Phase 4 -> Phase 5, "an event needs scoring") —
+# distinct producers, distinct consumers, distinct concerns.
+ASSESSMENT_STREAM_NAME = "supply_chain:assessments_created"
+ASSESSMENT_CONSUMER_GROUP = "phase7_alert_workers"
+
 logger = logging.getLogger("phase5.redis_stream")
 
 
@@ -48,6 +54,21 @@ def produce_alert(r: redis.Redis, customer_id: str, event_id: str, supplier_id: 
         "supplier_id": supplier_id,
         "title": title,
         "event_text": event_text,
+    })
+
+def produce_assessment_created(r: redis.Redis, assessment_id: str, customer_id: str,
+                                initial_severity: str | None, status: str, event_id: str):
+    """Call this from persist.py's persist_agent_assessment(), right after a
+    successful AgentAssessment MERGE. initial_severity (Phase 4's pre-LLM
+    severity, set regardless of whether the Groq call succeeded) is what
+    Phase 7's alert consumer filters on — not `severity`, which is None for
+    every needs_review row since it only gets set when `prediction is not None`."""
+    r.xadd(ASSESSMENT_STREAM_NAME, {
+        "assessment_id": assessment_id,
+        "customer_id": customer_id,
+        "initial_severity": initial_severity or "",
+        "status": status,
+        "event_id": event_id,
     })
 
 
