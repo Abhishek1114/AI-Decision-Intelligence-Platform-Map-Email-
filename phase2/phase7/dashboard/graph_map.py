@@ -23,6 +23,18 @@ WHERE p.location IS NOT NULL
 RETURN 'Port' AS node_type, p.port_id AS node_id, p.name AS name,
        NULL AS tier, p.country AS country,
        p.location.latitude AS latitude, p.location.longitude AS longitude
+UNION
+MATCH (w:Warehouse {customer_id: $customer_id})
+WHERE w.location IS NOT NULL
+RETURN 'Warehouse' AS node_type, w.warehouse_id AS node_id, w.name AS name,
+       NULL AS tier, w.country AS country,
+       w.location.latitude AS latitude, w.location.longitude AS longitude
+UNION
+MATCH (c:Customer {customer_id: $customer_id})
+WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL
+RETURN 'Customer' AS node_type, c.customer_id AS node_id, c.company_name AS name,
+       NULL AS tier, c.headquarters_country AS country,
+       c.latitude AS latitude, c.longitude AS longitude
 """
 
 FETCH_ACTIVE_ALERT_LOCATIONS_QUERY = """

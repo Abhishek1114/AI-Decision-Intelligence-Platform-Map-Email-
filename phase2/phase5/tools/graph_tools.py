@@ -216,12 +216,14 @@ def get_customer_product_graph(
         query = """
         MATCH (c:Customer {customer_id: $customer_id})-[:OWNS]->(p:Product)
         MATCH (p)-[cont:CONTAINS]->(comp:Component {customer_id: $customer_id})
-        MATCH (comp)<-[:SUPPLIES]-(matched:Supplier {supplier_id: $matched_supplier_id})
+        MATCH (comp)<-[matched_edge:SUPPLIES]-(matched:Supplier {supplier_id: $matched_supplier_id})
         WITH c, p, collect(DISTINCT comp) AS affected_components
         MATCH (p)-[cont2:CONTAINS]->(all_comp:Component {customer_id: $customer_id})
         WHERE all_comp IN affected_components
+        OPTIONAL MATCH (all_comp)<-[matched_r:SUPPLIES]-(:Supplier {supplier_id: $matched_supplier_id})
         OPTIONAL MATCH (all_comp)<-[sup_r:SUPPLIES]-(alt:Supplier)
-        RETURN p, all_comp, sup_r, alt
+        WHERE alt IS NULL OR alt.supplier_id <> $matched_supplier_id
+        RETURN p, all_comp, sup_r, alt, matched_r.annual_volume AS required_annual_volume
         """
         params = {"customer_id": customer_id, "matched_supplier_id": matched_supplier_id}
         narrowing = NarrowingMethod.SUPPLIER_MATCH
@@ -244,6 +246,7 @@ def get_customer_product_graph(
             comp = record["all_comp"]
             sup_r = record["sup_r"]
             alt = record["alt"]
+            required_annual_volume = record.get("required_annual_volume") 
 
             pid = p["product_id"]
             if pid not in products:
@@ -265,6 +268,7 @@ def get_customer_product_graph(
                 lead_time_days=comp["lead_time_days"],
                 inventory_buffer_days=comp["inventory_buffer_days"],
                 seeded_risk_level=comp.get("risk_level"),
+                required_annual_volume=required_annual_volume, 
             )
             if not any(c.component_id == component_model.component_id
                        for c in products[pid].components):
@@ -371,7 +375,7 @@ def build_observed_facts(
                 is_sole_sourced=component.is_sole_sourced,
                 severity=severity,
                 best_alternative_annual_volume=(best_alt.annual_volume if best_alt else None),
-                required_annual_volume=None,  # not tracked yet -- v2, see note below
+                 required_annual_volume=component.required_annual_volume,  # not tracked yet -- v2, see note below
             )
             component_exposures.append(component.computed_exposure)
         product.computed_exposure = aggregate_product_exposure(component_exposures)

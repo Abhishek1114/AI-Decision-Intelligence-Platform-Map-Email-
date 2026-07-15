@@ -29,7 +29,7 @@ logger = logging.getLogger("phase5.groq_client")
 
 MODEL = "openai/gpt-oss-120b"
 TPM_BUDGET = 6500          # throttle below the 8K published limit, not up to it
-MAX_OUTPUT_TOKENS = 900    # explicit cap so one call can't dominate the TPM window
+MAX_OUTPUT_TOKENS = 2400    # explicit cap so one call can't dominate the TPM window
 CHARS_PER_TOKEN_ESTIMATE = 4  # rough pre-send estimate before we have real usage data
 
 
@@ -115,11 +115,20 @@ def call_groq_structured(
         raw_text = response.choices[0].message.content
         last_raw = raw_text
 
+        if raw_text is None:
+            logger.warning(f"Model returned content=None on attempt {attempt + 1} (token limit or content filter?)")
+            attempt_user_prompt = (
+                user_prompt
+                + "\n\nIMPORTANT: Your previous response was empty. "
+                  "Return ONLY valid JSON matching the schema exactly, no other text."
+            )
+            continue
+
         try:
             parsed_json = json.loads(raw_text)
             parsed_model = output_model.model_validate(parsed_json)
             return parsed_model, None
-        except (json.JSONDecodeError, ValidationError) as e:
+        except (json.JSONDecodeError, ValidationError, TypeError) as e:
             logger.warning(f"Validation failed on attempt {attempt + 1}: {e}. Raw: {raw_text[:500]}")
             attempt_user_prompt = (
                 user_prompt

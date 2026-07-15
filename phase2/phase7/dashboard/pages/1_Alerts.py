@@ -1,7 +1,11 @@
 import json
 import streamlit as st
-from phase2.phase7.dashboard.neo4j_client import get_driver
+import pandas as pd
 from phase2.phase7.dashboard.graph_path import fetch_graph_path
+from phase2.phase7.dashboard.neo4j_client import get_driver
+from phase2.phase7.dashboard.assessment_trends import fetch_weekly_severity_counts
+
+
 
 if "customer_id" not in st.session_state:
     st.warning("Please log in from the main page.")
@@ -24,6 +28,25 @@ SET a.acknowledged = true, a.acknowledged_at = datetime(), a.acknowledged_by = $
 """
 
 st.title("Alerts")
+
+with driver.session() as session:
+    trend_rows = fetch_weekly_severity_counts(session, customer_id)
+
+if trend_rows:
+    df = pd.DataFrame(trend_rows)
+    pivot = df.pivot(index="week_start", columns="severity", values="assessment_count").fillna(0)
+
+    SEVERITY_ORDER = ["critical", "high", "medium", "low", "needs_review"]
+    pivot = pivot[[c for c in SEVERITY_ORDER if c in pivot.columns]]
+
+    st.subheader("Assessment volume by week")
+    st.bar_chart(pivot)
+    st.caption("Stacked by severity — includes all assessments, not just active high/critical alerts below.")
+else:
+    st.caption("No assessment history yet for this customer.")
+
+st.divider()
+
 with driver.session() as session:
     records = list(session.run(FETCH_ALERTS, parameters={"customer_id": customer_id}))
 

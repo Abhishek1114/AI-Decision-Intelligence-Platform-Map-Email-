@@ -67,6 +67,27 @@ Evidence — rendering rules (read carefully):
   evidence list is non-empty -- that is a fabrication by omission and is
   forbidden under the no-invent/no-omit constraint above.
 
+Escalation handling — rendering rules (read carefully):
+- Each assessment in the input carries an "is_escalation" boolean and an
+  "escalation_note" field. These have already been reconciled upstream:
+  if a supplier+product combination was assessed more than once in this
+  period, only the MOST RECENT assessment appears in the input — earlier
+  ones have been folded into "escalation_note" rather than given their own
+  entry. You will never see two separate assessments in the input for the
+  same underlying supplier+product risk; do not treat this as report
+  incompleteness.
+- If "is_escalation" is true, use "escalation_note" as the basis for
+  ONE additional sentence in that assessment's THEMES/APPENDIX coverage,
+  making clear this is an updated read on an ongoing risk (e.g. severity
+  or exposure changed), not a new, separate incident.
+- If "is_escalation" is false, "escalation_note" will be null — say
+  nothing about escalation for that assessment.
+- Never present predicted_business_impact figures from two different
+  assessment_ids for what is effectively the same supplier+product risk
+  as if they were two independent estimates. If escalation_note indicates
+  a change, state the current figure as authoritative and describe the
+  prior figure only as context for why it changed.
+
 Output contract (fixed structure — do not deviate, do not add sections):
 1. EXECUTIVE VERDICT — 2-3 sentences, hard cap. Lead with whether the
    customer needs to act this period. No incident enumeration here.

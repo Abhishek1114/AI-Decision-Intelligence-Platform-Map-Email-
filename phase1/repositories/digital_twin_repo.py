@@ -45,10 +45,14 @@ class CustomerDigitalTwinRepository:
             n.headquarters_city    = $headquarters_city,
             n.contact_email        = $contact_email,
             n.annual_revenue_usd   = $annual_revenue_usd,
+            n.latitude             = $latitude,
+            n.longitude            = $longitude,
             n.is_active            = $is_active,
             n.created_at           = $created_at
         ON MATCH SET
             n.company_name         = $company_name,
+            n.latitude             = $latitude,
+            n.longitude            = $longitude,
             n.is_active            = $is_active,
             n.updated_at           = $updated_at
         """
@@ -60,6 +64,8 @@ class CustomerDigitalTwinRepository:
             "headquarters_city":     c.headquarters_city,
             "contact_email":         c.contact_email,
             "annual_revenue_usd":    c.annual_revenue_usd,
+            "latitude":              c.latitude,
+            "longitude":             c.longitude,
             "is_active":             c.is_active,
             "created_at":            c.created_at.isoformat(),
             "updated_at":            _now(),

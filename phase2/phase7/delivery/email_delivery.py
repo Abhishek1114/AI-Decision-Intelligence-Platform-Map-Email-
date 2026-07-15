@@ -18,52 +18,94 @@ class EmailDelivery(DeliveryChannel):
 
     def send_alert(self, ctx: dict, needs_review: bool = False) -> None:
         msg = EmailMessage()
-        severity_label = (ctx.get("initial_severity") or "unknown").upper()
+
+        # --- derive severity labels ---
+        initial_sev = (ctx.get("initial_severity") or "unknown").upper()
+        final_sev = (ctx.get("severity") or initial_sev).upper()
+        conf_raw = ctx.get("confidence") or 0
+        conf_pct = int(round(conf_raw * 100)) if isinstance(conf_raw, float) else int(conf_raw)
+        conf_label = "High" if conf_pct >= 80 else "Medium" if conf_pct >= 50 else "Low"
+
+        event_title = ctx.get("event_title") or (ctx.get("event_titles") or [""])[0] or "Supply-chain disruption"
+        customer_id = ctx.get("customer_id", "")
+        supplier_id = ctx.get("supplier_id", "")
+
+        # --- subject ---
         if needs_review:
-            msg["Subject"] = f"[{severity_label} — PENDING REVIEW] Possible supply chain issue — {ctx['company_name']}"
-            banner = (
-                "NOTE: This assessment could not be fully validated by our analysis "
-                "engine and is pending human review. The severity below reflects "
-                "our upstream disruption-matching signal, not a confirmed AI assessment.\n\n"
+            msg["Subject"] = (
+                f"[{final_sev} — PENDING REVIEW] {event_title} — {ctx['company_name']}"
             )
         else:
-            msg["Subject"] = f"[{severity_label}] Supply chain alert — {ctx['company_name']}"
-            banner = ""
+            msg["Subject"] = f"[{final_sev}] {event_title} — {ctx['company_name']}"
+
         msg["From"] = SMTP_USER
         msg["To"] = ctx["contact_email"]
 
+        # --- headline ---
+        headline = f"{final_sev} — {event_title}"
+        if customer_id:
+            headline += f" — customer={customer_id}"
+        if supplier_id:
+            headline += f" via supplier={supplier_id}"
+        if initial_sev != final_sev and initial_sev != "UNKNOWN":
+            headline += f"  [Initial: {initial_sev} → Reassessed: {final_sev}]"
+
+        lines: list[str] = []
+
+        if needs_review:
+            lines.append(
+                "NOTE: This assessment could not be fully validated by our analysis "
+                "engine and is pending human review. The severity below reflects "
+                "our upstream disruption-matching signal, not a confirmed AI assessment."
+            )
+            lines.append("")
+
+        lines.append(headline)
+        lines.append(f"Confidence: {conf_label} ({conf_pct}%) | Updated: {ctx.get('updated_at', 'N/A')}")
+        lines.append("")
+
+        # --- affected products ---
+        products = ctx.get("affected_product_ids") or []
+        lines.append(
+            "Affected products: " + (", ".join(products) if products else "none identified")
+        )
+        lines.append("")
+
+        # --- impact ---
+        lines.append(f"Impact: {ctx.get('predicted_business_impact', 'N/A')}")
+        lines.append("")
+
+        # --- evidence ---
+        evidence = ctx.get("evidence") or []
+        if evidence:
+            lines.append("Evidence:")
+            for e in evidence:
+                lines.append(f"  • {e}")
+        else:
+            lines.append("Evidence: none returned by model — treat impact statement as unverified")
+        lines.append("")
+
+        # --- recommended actions ---
         actions = json.loads(ctx.get("recommended_actions_json") or "[]")
-        lines = [
-            banner.strip(),
-            f"Severity: {severity_label}  (confidence: {ctx.get('confidence')})",
-            f"Predicted business impact: {ctx.get('predicted_business_impact')}",
-            "", "Source events:",
-            *[f"  - {t}" for t in ctx.get("event_titles", []) if t],
-            "", "Evidence:",
-            *[f"  - {e}" for e in (ctx.get("evidence") or [])],
-            "", "Recommended actions:",
-            *[f"  - {a}" for a in actions],
-            "", f"Assessment ID: {ctx['assessment_id']}",
-        ]
-        msg.set_content("\n".join(filter(None, lines)))
+        if actions:
+            lines.append("Recommended actions:")
+            for a in actions:
+                if isinstance(a, dict):
+                    urgency = a.get("urgency", "?").upper()
+                    action_text = a.get("action", "")
+                    rationale = a.get("rationale", "")
+                    lines.append(f"  [{urgency}] {action_text}")
+                    if rationale:
+                        lines.append(f"      → {rationale}")
+                else:
+                    lines.append(f"  - {a}")
+
+        lines.append("------------------------------------------------------------")
+        lines.append(f"Assessment ID: {ctx['assessment_id']}")
+
+        msg.set_content("\n".join(lines))
         self._send(msg)
 
-    def send_alert(self, contact_email: str, company_name: str, body_text: str,
-               severity: str, needs_review: bool = False) -> None:
-        msg = EmailMessage()
-        sev_label = (severity or "unknown").upper()
-        subject = f"[{sev_label}] Supply chain alert — {company_name}"
-        if needs_review:
-            subject = f"[{sev_label} — PENDING REVIEW] " + subject[subject.index("]")+2:]
-            body_text = (
-                "NOTE: This assessment could not be fully validated and is pending "
-                "human review. Treat the details below as unconfirmed.\n\n" + body_text
-            )
-        msg["Subject"] = subject
-        msg["From"] = SMTP_USER
-        msg["To"] = contact_email
-        msg.set_content(body_text)
-        self._send(msg)
 
     def send_report(self, report_context: dict, pdf_path: str) -> None:
         msg = EmailMessage()

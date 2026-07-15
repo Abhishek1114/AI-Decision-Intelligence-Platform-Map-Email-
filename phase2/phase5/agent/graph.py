@@ -58,6 +58,25 @@ Rules:
   those are already known. Predict what happens GIVEN those numbers and this event.
 - Do not calculate or invent dollar figures. Reference computed_exposure verbatim if 
   discussing financial impact.
+- When a percentage or ratio appears anywhere in the input (e.g. in computed_exposure
+  basis strings), you may reference that number ONLY together with its exact original
+  label. Do not rename, reinterpret, or reattach it to a different concept (e.g. a
+  precomputed "exposure" percentage must not be described as "coverage", and vice
+  versa). If you are unsure what a number represents, quote the source field's
+  wording verbatim instead of paraphrasing it.
+- "Coverage" and "exposure" are not interchangeable: coverage = 
+  alternative_supplier_volume / required_volume;exposure = 1 - coverage (unmet
+  share). If you state one, do not derive or restate the other from raw quantities
+-Do not calculate ratios or percentages yourself. If discussing coverage,
+ either state the raw quantities (e.g., '2,000,000 of 4,500,000 units') without a derived 
+ percentage, or reference a precomputed coverage/percentage field verbatim if one is provided in the input.
+- Report event duration as a standalone fact only (e.g., "the event is expected to
+  last 14 days"). Do not use it in any sentence containing words like "exceeds,"
+  "surpasses," or "outlasts" applied to buffer or lead-time figures — that
+  comparison is valid only between lead_time_days and inventory_buffer_days.
+- Any number, ratio, or day-count must be identical everywhere it appears in your
+  output. Before finalizing, check that evidence[], recommended_actions[], and any
+  narrative fields do not restate the same fact with conflicting values.
 """
 
 

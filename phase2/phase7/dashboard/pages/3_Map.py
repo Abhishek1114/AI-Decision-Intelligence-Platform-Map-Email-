@@ -117,9 +117,11 @@ if show_india_boundary and INDIA_STATES_GEOJSON.exists():
 # Node + alert layers
 # ---------------------------------------------------------------------------
 NODE_COLORS = {
-    "Supplier": [30, 144, 255, 160],   # blue
-    "Factory":  [255, 165, 0, 160],    # orange
-    "Port":     [46, 139, 87, 160],    # green
+    "Supplier":  [30, 144, 255, 160],   # blue
+    "Factory":   [255, 165, 0, 160],    # orange
+    "Port":      [46, 139, 87, 160],    # green
+    "Warehouse": [147, 112, 219, 160],  # purple
+    "Customer":  [255, 255, 255, 220],  # white
 }
 
 for n in nodes:
@@ -167,7 +169,7 @@ st.pydeck_chart(pdk.Deck(
 ))
 
 col1, col2, col3 = st.columns(3)
-col1.markdown("🔵 Supplier &nbsp;&nbsp; 🟠 Factory &nbsp;&nbsp; 🟢 Port")
+col1.markdown("🔵 Supplier &nbsp;&nbsp; 🟠 Factory &nbsp;&nbsp; 🟢 Port &nbsp;&nbsp; 🟣 Warehouse &nbsp;&nbsp; ⚪ Customer")
 if alerts:
     col2.markdown(f"🔴 **{len(alerts)} active high/critical alert location(s)** — larger, outlined markers")
 else:

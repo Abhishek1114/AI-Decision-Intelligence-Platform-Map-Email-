@@ -49,6 +49,41 @@ def _link_tier2_feeds_tier1(repo, customer_id: str, tier2_supplier_id: str, tier
         })
 
 
+def _link_port_to_warehouse(repo, customer_id: str, port_id: str, warehouse_id: str) -> None:
+    """
+    Creates (Port)-[:DELIVERS_TO]->(Warehouse) — last-mile leg from the
+    destination port into the customer's warehouse.
+    """
+    cypher = """
+    MATCH (p:Port {port_id: $pid, customer_id: $cid})
+    MATCH (w:Warehouse {warehouse_id: $wid, customer_id: $cid})
+    MERGE (p)-[r:DELIVERS_TO]->(w)
+    ON CREATE SET r.created_at = $now
+    """
+    with repo._driver.session() as s:
+        s.run(cypher, parameters={
+            "pid": port_id, "wid": warehouse_id, "cid": customer_id,
+            "now": __import__('datetime').datetime.utcnow().isoformat(),
+        })
+
+
+def _link_warehouse_to_customer(repo, customer_id: str, warehouse_id: str) -> None:
+    """
+    Creates (Warehouse)-[:SUPPLIES]->(Customer) — closes the chain so the
+    map's edge query can draw the final arc into the customer HQ dot.
+    """
+    cypher = """
+    MATCH (w:Warehouse {warehouse_id: $wid, customer_id: $cid})
+    MATCH (c:Customer {customer_id: $cid})
+    MERGE (w)-[r:SUPPLIES]->(c)
+    ON CREATE SET r.created_at = $now
+    """
+    with repo._driver.session() as s:
+        s.run(cypher, parameters={
+            "wid": warehouse_id, "cid": customer_id,
+            "now": __import__('datetime').datetime.utcnow().isoformat(),
+        })
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Customer 1 — Apex Electronics
 # ─────────────────────────────────────────────────────────────────────────────
@@ -62,7 +97,8 @@ def seed_apex_electronics(repo: CustomerDigitalTwinRepository) -> str:
         customer_id=cid, company_name="Apex Electronics Inc.",
         industry=IndustryVertical.ELECTRONICS,
         headquarters_country="United States", headquarters_city="Cupertino",
-        contact_email="supplychain@apexelectronics.com",
+        contact_email="shah.abhi1114@gmail.com",
+        latitude=37.3230, longitude=-122.0322,
         annual_revenue_usd=380_000_000_000,
     ))
     print("  Customer: Apex Electronics")
@@ -224,7 +260,7 @@ def seed_apex_electronics(repo: CustomerDigitalTwinRepository) -> str:
     # ── Warehouse + Route ─────────────────────────────────────────────────────
     wh = Warehouse(customer_id=cid, warehouse_id="wh_apex_us",
         name="Apex US Distribution Center", country="United States", city="Memphis",
-        latitude=35.1495, longitude=-90.0490, type="distribution_center",
+        latitude=37.3230, longitude=-122.0322, type="distribution_center",
         capacity_sqm=85000, inventory_buffer_days=21)
     repo.upsert_warehouse(wh)
     print(f"  Warehouse: {wh.name}")
@@ -237,6 +273,12 @@ def seed_apex_electronics(repo: CustomerDigitalTwinRepository) -> str:
         carrier="Evergreen Marine", annual_shipment_volume=2400)
     repo.upsert_route(route)
     print(f"  Route: {route.name}")
+
+    _link_port_to_warehouse(repo, cid, "port_apex_lax", "wh_apex_us")
+    _link_warehouse_to_customer(repo, cid, "wh_apex_us")
+
+    print("  ✓ Apex Electronics complete (2 Tier 2: ASML, Shin-Etsu → TSMC)")
+    return cid
 
     print("  ✓ Apex Electronics complete (2 Tier 2: ASML, Shin-Etsu → TSMC)")
     return cid
@@ -255,7 +297,8 @@ def seed_novara_pharma(repo: CustomerDigitalTwinRepository) -> str:
         customer_id=cid, company_name="Novara Pharmaceuticals Ltd.",
         industry=IndustryVertical.PHARMA,
         headquarters_country="Ireland", headquarters_city="Dublin",
-        contact_email="supplychain@novarapharma.com",
+        contact_email="stonemountain1114@gmail.com",
+        latitude=53.3498, longitude=-6.2603,
         annual_revenue_usd=24_000_000_000,
     ))
     print("  Customer: Novara Pharma")
@@ -383,6 +426,9 @@ def seed_novara_pharma(repo: CustomerDigitalTwinRepository) -> str:
         carrier="Maersk", annual_shipment_volume=480)
     repo.upsert_route(route)
     print(f"  Route: {route.name}")
+
+    _link_port_to_warehouse(repo, cid, "port_nov_rtm", "wh_nov_dublin")
+    _link_warehouse_to_customer(repo, cid, "wh_nov_dublin")
 
     print("  ✓ Novara Pharma complete (2 Tier 2: CSPC→BioSynth, Evonik→LipidChem)")
     return cid
@@ -974,7 +1020,8 @@ def seed_cascade_memory(repo: CustomerDigitalTwinRepository) -> str:
         customer_id=cid, company_name="Cascade Memory Corp.",
         industry=IndustryVertical.ELECTRONICS,
         headquarters_country="United States", headquarters_city="Boise",
-        contact_email="supplychain@cascadememory.com",
+        contact_email="shah.abhi1114@gmail.com",
+        latitude=43.6150, longitude=-116.2023, 
         annual_revenue_usd=22_000_000_000,
     ))
     print("  Customer: Cascade Memory Corp")
@@ -1012,7 +1059,7 @@ def seed_cascade_memory(repo: CustomerDigitalTwinRepository) -> str:
         latitude=24.1477, longitude=120.6736,
         contract_value_usd=6_000_000_000,
         lead_time_days=100, on_time_delivery_rate=0.94, quality_score=0.98,
-        risk_level=RiskLevel.HIGH, is_sole_source=True)
+        risk_level=RiskLevel.HIGH, is_sole_source=False)
     supp_kioxia = Supplier(customer_id=cid, supplier_id="supp_cas_kioxia",
         company_name="Kioxia Corporation", tier=SupplierTier.TIER_1,
         country="Japan", city="Yokkaichi",
@@ -1082,6 +1129,9 @@ def seed_cascade_memory(repo: CustomerDigitalTwinRepository) -> str:
     repo.upsert_route(route)
     print(f"  Route: {route.name}")
 
+    _link_port_to_warehouse(repo, cid, "port_cas_oak", "wh_cas_boise")
+    _link_warehouse_to_customer(repo, cid, "wh_cas_boise")
+
     print("  ✓ Cascade Memory Corp complete (1 Tier 2: SUMCO → Micron Taiwan)")
     return cid
 
@@ -1101,7 +1151,8 @@ def seed_monsoon_apparel(repo: CustomerDigitalTwinRepository) -> str:
         customer_id=cid, company_name="Monsoon Apparel Group",
         industry=IndustryVertical.APPAREL,  # TODO: confirm this enum value exists
         headquarters_country="United Kingdom", headquarters_city="London",
-        contact_email="supplychain@monsoonapparel.co.uk",
+        contact_email="stonemountain1114@gmail.com",
+        latitude=51.5074, longitude=-0.1278,
         annual_revenue_usd=6_500_000_000,
     ))
     print("  Customer: Monsoon Apparel Group")
@@ -1151,13 +1202,21 @@ def seed_monsoon_apparel(repo: CustomerDigitalTwinRepository) -> str:
         contract_value_usd=650_000_000,
         lead_time_days=50, on_time_delivery_rate=0.89, quality_score=0.93,
         risk_level=RiskLevel.MEDIUM)
-    for sup in [supp_dhaka, supp_hcm]:
+    supp_hanoi = Supplier(customer_id=cid, supplier_id="supp_mon_hanoi",
+        company_name="Hanoi Denim Mills", tier=SupplierTier.TIER_1,
+        country="Vietnam", city="Hanoi",
+        latitude=21.0278, longitude=105.8342,
+        contract_value_usd=310_000_000,
+        lead_time_days=55, on_time_delivery_rate=0.86, quality_score=0.90,
+        risk_level=RiskLevel.MEDIUM)
+    print(f"  Supplier T1: {supp_hanoi.company_name}")
+    for sup in [supp_dhaka, supp_hcm, supp_hanoi]:
         repo.upsert_supplier(sup)
         print(f"  Supplier T1: {sup.company_name}")
 
     repo.link_supplier_to_component(cid, "supp_mon_dhaka", "comp_mon_cotton",   annual_volume=8_000_000)
     repo.link_supplier_to_component(cid, "supp_mon_hcm",   "comp_mon_denimfab", annual_volume=4_500_000)
-
+    repo.link_supplier_to_component(cid, "supp_mon_hanoi", "comp_mon_denimfab", annual_volume=2_000_000)
     # ── Tier 2 ────────────────────────────────────────────────────────────────
     # Vardhman Textiles → Dhaka Garments: raw cotton yarn spun in India,
     # shipped in via Chittagong — cyclone landfall near Chittagong is one
@@ -1211,6 +1270,10 @@ def seed_monsoon_apparel(repo: CustomerDigitalTwinRepository) -> str:
         transport_mode=TransportMode.SEA, transit_time_days=28,
         carrier="Maersk", annual_shipment_volume=900)
     repo.upsert_route(route)
+
+    _link_port_to_warehouse(repo, cid, "port_mon_fel", "wh_mon_uk")
+    _link_warehouse_to_customer(repo, cid, "wh_mon_uk")
+
     print(f"  Route: {route.name}")
 
     print("  ✓ Monsoon Apparel Group complete (1 Tier 2: Vardhman → Dhaka Garments)")

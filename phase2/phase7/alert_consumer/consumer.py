@@ -16,7 +16,6 @@ from neo4j import GraphDatabase
 import redis
 
 from phase2.phase7.delivery.email_delivery import EmailDelivery
-from phase2.phase5.tools.alert_formatting import format_manager_alert
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("phase7_alert_consumer")
@@ -53,7 +52,7 @@ RETURN a.assessment_id AS assessment_id,
        c.company_name AS company_name,
        c.contact_email AS contact_email,
        e.title AS event_title,
-       e.description AS event_description
+       e.description AS event_description,
        imp.severity AS impact_severity
 """
 
@@ -101,26 +100,27 @@ def process_message(driver, delivery, msg_id, fields, r):
         logger.error(f"Customer {record['customer_id']} has no contact_email — leaving in PEL for manual fix")
         return  # don't ack — data problem, not transient
 
-    assessment_dict = {
+    ctx = {
+        "assessment_id": assessment_id,
         "customer_id": record["customer_id"],
         "supplier_id": record["supplier_id"],
+        "initial_severity": record["initial_severity"],
         "severity": record["severity"],
+        "company_name": record["company_name"],
+        "contact_email": record["contact_email"],
         "confidence": record["confidence"],
-        "updated_at": record["updated_at"],
-        "affected_product_ids": record["affected_product_ids"],
         "predicted_business_impact": record["predicted_business_impact"],
         "evidence": record["evidence"],
         "recommended_actions_json": record["recommended_actions_json"],
+        "affected_product_ids": record["affected_product_ids"],
+        "updated_at": record["updated_at"],
+        "event_titles": [record["event_title"] or "Untitled event"],
+        "event_title": record["event_title"] or "Untitled event",
     }
-    impact_dict = {"severity": record["impact_severity"]}
-    body_text = format_manager_alert(impact_dict, assessment_dict, record["event_title"] or "Untitled event")
 
     needs_review = record["status"] == "needs_review"
     try:
-        delivery.send_alert(
-            record["contact_email"], record["company_name"], body_text,
-            record["severity"] or record["initial_severity"], needs_review=needs_review,
-        )
+        delivery.send_alert(ctx, needs_review=needs_review)
     except Exception as exc:
         logger.error(f"Send failed for {assessment_id}: {exc}")
         return  # don't ack — retried via XAUTOCLAIM

@@ -45,7 +45,66 @@ MOCK_PORT_DATA = [
         "country":      "India",
         "latitude":     13.0827,
         "longitude":    80.2707,
+        "base_congestion": 0.50,   # TEST: "medium" band midpoint (Novara Pharma)
+    },
+
+    # ── Added for Phase 7 customers (Andina Copper, Cascade Memory,
+    #    Monsoon Apparel, Pacific Rim AgriFoods) ──────────────────────────────
+    {
+        "locode":       "CLANF",
+        "port_name":    "Puerto Antofagasta",
+        "country":      "Chile",
+        "latitude":     -23.6509,
+        "longitude":    -70.3975,
+        "base_congestion": 0.30,   # Bulk mineral port, usually low congestion
+    },
+    {
+        "locode":       "TWTXG",
+        "port_name":    "Port of Taichung",
+        "country":      "Taiwan",
+        "latitude":     24.2833,
+        "longitude":    120.5167,
+        "base_congestion": 0.70,   # TEST: "high" band midpoint (Cascade Memory)
+    },
+    {
+        "locode":       "USOAK",
+        "port_name":    "Port of Oakland",
+        "country":      "United States",
+        "latitude":     37.7955,
+        "longitude":    -122.2781,
+        "base_congestion": 0.38,
+    },
+    {
+        "locode":       "BDCGP",
+        "port_name":    "Chittagong Port",
+        "country":      "Bangladesh",
+        "latitude":     22.3569,
+        "longitude":    91.7832,
+        "base_congestion": 0.95,   # TEST: guaranteed "critical" even at -0.15 noise (Monsoon Apparel)
+    },
+    {
+        "locode":       "GBFXT",
+        "port_name":    "Port of Felixstowe",
+        "country":      "United Kingdom",
+        "latitude":     51.9539,
+        "longitude":    1.3512,
         "base_congestion": 0.40,
+    },
+    {
+        "locode":       "IDDUM",
+        "port_name":    "Port of Dumai",
+        "country":      "Indonesia",
+        "latitude":     1.6667,
+        "longitude":    101.4500,
+        "base_congestion": 0.35,
+    },
+    {
+        "locode":       "SGSIN",
+        "port_name":    "Port of Singapore",
+        "country":      "Singapore",
+        "latitude":     1.2644,
+        "longitude":    103.8200,
+        "base_congestion": 0.55,   # High-throughput global hub
     },
 ]
 
@@ -120,6 +179,3 @@ def normalise_portwatch(record: dict) -> dict:
         "source_url":  f"https://portwatch.imf.org/ports/{locode}",
         "occurred_at": now_iso,
     }
-
-# normalise_portwatch is IDENTICAL to the original — no changes needed
-# Import it from the original file:

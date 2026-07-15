@@ -35,7 +35,10 @@ class ObservedComponent(BaseModel):
     lead_time_days: int
     inventory_buffer_days: int
     seeded_risk_level: Optional[str] = None  # static Phase 1 value, never overwritten
+    required_annual_volume: Optional[int] = None   
     computed_exposure: Optional["ComputedExposure"] = None 
+
+
 
 
 class ComputedExposure(BaseModel):
