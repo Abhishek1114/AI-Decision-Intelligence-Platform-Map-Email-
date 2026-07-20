@@ -21,7 +21,13 @@ def generate_and_send_report_pdf(session, report_id: str, customer_id: str) -> N
         print(f"Could not re-fetch {report_id} for PDF generation — skipping")
         return
 
-    pdf_path = generate_pdf(report_id, record["content"])
+    pdf_path = generate_pdf(
+        report_id, record["content"],
+        incident_count=record["incident_count"],
+        theme_count=record["theme_count"],
+        escalation_rate=record["escalation_rate"],
+        status=record.get("status"),
+    )
     session.run(SET_PDF_PATH, parameters={"report_id": report_id, "pdf_path": pdf_path})
 
     if not record["contact_email"]:
